@@ -1,0 +1,252 @@
+# Notification System - Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                     │
+│                           NOTIFICATION SYSTEM ARCHITECTURE                          │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+
+                                    CLIENTS
+                                       │
+                                       │ HTTP Requests
+                                       ▼
+                        ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+                        ┃     API GATEWAY          ┃ Port 8000
+                        ┃  ┌──────────────────┐   ┃
+                        ┃  │ • Authentication │   ┃
+                        ┃  │ • Validation     │   ┃
+                        ┃  │ • Rate Limiting  │   ┃
+                        ┃  │ • Idempotency    │   ┃
+                        ┃  │ • Circuit Breaker│   ┃
+                        ┃  │ • Status Tracking│   ┃
+                        ┃  └──────────────────┘   ┃
+                        ┗━━━━━━━━━━━┳━━━━━━━━━━━━━┛
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+         ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+         │ PostgreSQL   │  │   Redis      │  │  RabbitMQ    │
+         │  Gateway DB  │  │  ┌────────┐  │  │  ┌────────┐  │
+         │              │  │  │ Cache  │  │  │  │Exchange│  │
+         │ • requests   │  │  │ Rate   │  │  │  │ direct │  │
+         │ • status     │  │  │ Idempo │  │  │  └────┬───┘  │
+         │ • tracking   │  │  └────────┘  │  │       │      │
+         └──────────────┘  └──────────────┘  └───────┼──────┘
+                                                      │
+                                    ┌─────────────────┼─────────────────┐
+                                    │                 │                 │
+                              email.queue       push.queue       failed.queue
+                                    │                 │                 │
+                                    ▼                 ▼                 ▼
+                        ┏━━━━━━━━━━━━━━━┓  ┏━━━━━━━━━━━━━━━┓  ┏━━━━━━━━━━━━┓
+                        ┃ EMAIL SERVICE  ┃  ┃ PUSH SERVICE   ┃  ┃   FAILED   ┃
+                        ┃                ┃  ┃                ┃  ┃   QUEUE    ┃
+                        ┃ • SMTP         ┃  ┃ • FCM          ┃  ┃            ┃
+                        ┃ • Retry Logic  ┃  ┃ • Retry Logic  ┃  ┃ • Manual   ┃
+                        ┃ • Circuit Break┃  ┃ • Circuit Break┃  ┃ • Review   ┃
+                        ┗━━━━━━━┳━━━━━━━━┛  ┗━━━━━━━┳━━━━━━━┛  ┗━━━━━━━━━━━━┛
+                                │                   │
+                                │                   │
+                ┌───────────────┴───────────────────┴──────────────┐
+                │                                                   │
+                ▼                                                   ▼
+     ┏━━━━━━━━━━━━━━━━━━┓                              ┏━━━━━━━━━━━━━━━━━━┓
+     ┃ TEMPLATE SERVICE ┃                              ┃  USER SERVICE    ┃
+     ┃   Port 8002      ┃                              ┃   Port 8001      ┃
+     ┃                  ┃                              ┃                  ┃
+     ┃ • Templates      ┃                              ┃ • Users          ┃
+     ┃ • Versioning     ┃                              ┃ • Auth (JWT)     ┃
+     ┃ • Multi-lang     ┃                              ┃ • Preferences    ┃
+     ┃ • Jinja2 Render  ┃                              ┃ • CRUD           ┃
+     ┗━━━━━━━┳━━━━━━━━━━┛                              ┗━━━━━━━┳━━━━━━━━━━┛
+             │                                                  │
+             ▼                                                  ▼
+     ┌──────────────┐                                  ┌──────────────┐
+     │ PostgreSQL   │                                  │ PostgreSQL   │
+     │ Template DB  │                                  │   User DB    │
+     │              │                                  │              │
+     │ • templates  │                                  │ • users      │
+     │ • versions   │                                  │ • preferences│
+     └──────────────┘                                  └──────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+
+                              DATA FLOW EXAMPLE
+                              
+┌──────┐
+│Client│ 1. POST /notifications/send
+└──┬───┘    {user_id, channel, template, variables}
+   │
+   ▼
+┌────────────────┐
+│  API Gateway   │ 2. Validate, Check Idempotency, Rate Limit
+└───────┬────────┘
+        │ 3. Save to DB (status: pending)
+        ▼
+    ┌────────┐
+    │ Redis  │ 4. Check/Set Idempotency, Rate Limit
+    └────────┘
+        │
+        ▼ 5. Publish to Queue (status: queued)
+    ┌──────────┐
+    │ RabbitMQ │ email.queue or push.queue
+    └─────┬────┘
+          │
+          ▼ 6. Worker Consumes Message
+    ┌──────────────┐
+    │Email/Push Srv│ 7. Get Template, Render Variables
+    └──────┬───────┘
+           │ 8. Get Template
+           ▼
+    ┌──────────────┐
+    │Template Svc  │ 9. Render with Jinja2
+    └──────┬───────┘
+           │ 10. Return Rendered Content
+           ▼
+    ┌──────────────┐
+    │Email/Push Srv│ 11. Send via SMTP/FCM (with retry & circuit breaker)
+    └──────┬───────┘
+           │ 12. Update Status
+           ▼
+    ┌──────────────┐
+    │  API Gateway │ 13. Status: sent/failed
+    └──────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+
+                            ERROR HANDLING FLOW
+                            
+    ┌──────────────┐
+    │   Message    │
+    │   Received   │
+    └──────┬───────┘
+           │
+           ▼
+    ┌──────────────┐
+    │ Try Send (1) │────Failed───┐
+    └──────┬───────┘             │
+           │                     │ Retry 1: Wait 2s
+           ▼                     │
+    ┌──────────────┐             │
+    │ Try Send (2) │◄────────────┘
+    └──────┬───────┘
+           │                     
+           │                     Failed
+           ▼                     │
+    ┌──────────────┐             │ Retry 2: Wait 4s
+    │ Try Send (3) │◄────────────┘
+    └──────┬───────┘
+           │
+           │                     Failed
+           ▼                     │
+    ┌──────────────┐             │ Retry 3: Wait 8s
+    │  Try Send    │◄────────────┘
+    │  (Max=3)     │
+    └──────┬───────┘
+           │
+    ┌──────┴─────────┐
+    │                │
+    ▼                ▼
+┌─────────┐    ┌──────────┐
+│ SUCCESS │    │  FAILED  │
+│Status:  │    │  Status: │
+│ sent    │    │  failed  │
+└─────────┘    └────┬─────┘
+                    │
+                    ▼
+            ┌────────────────┐
+            │ Dead Letter    │
+            │ Queue (failed) │
+            │ Manual Review  │
+            └────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+
+                          CIRCUIT BREAKER STATES
+                          
+    ┌─────────────────────────────────────────┐
+    │                                         │
+    │    CLOSED (Normal Operation)            │
+    │    All requests pass through            │
+    │                                         │
+    └───────┬─────────────────────────────────┘
+            │
+            │ 5 failures detected
+            ▼
+    ┌─────────────────────────────────────────┐
+    │                                         │
+    │    OPEN (Service Down)                  │
+    │    Reject all requests immediately      │
+    │    Wait 60 seconds...                   │
+    │                                         │
+    └───────┬─────────────────────────────────┘
+            │
+            │ Timeout elapsed
+            ▼
+    ┌─────────────────────────────────────────┐
+    │                                         │
+    │    HALF-OPEN (Testing)                  │
+    │    Allow limited requests               │
+    │                                         │
+    └───┬──────────────────────────┬──────────┘
+        │                          │
+        │ Success                  │ Failure
+        ▼                          ▼
+    ┌───────┐                  ┌───────┐
+    │CLOSED │                  │ OPEN  │
+    └───────┘                  └───────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+    ┌─────────────────────────┴─────────────────────────────┐
+    │                   INFRASTRUCTURE                       │
+    │  ┌──────────┬──────────┬──────────┬─────────────────┐ │
+    │  │RabbitMQ  │  Redis   │PostgreSQL│     Docker      │ │
+    │  │          │          │          │ Docker Compose  │ │
+    │  │ Queues   │ Cache    │ Users    │ Orchestration   │ │
+    │  │ Exchange │ Sessions │ Templates│ Networking      │ │
+    │  │ DLQ      │ Rate Lim │ Gateway  │ Volumes         │ │
+    │  └──────────┴──────────┴──────────┴─────────────────┘ │
+    └───────────────────────────────────────────────────────┘
+                              │
+                              │
+    ┌─────────────────────────┴─────────────────────────────┐
+    │                  EXTERNAL SERVICES                     │
+    │  ┌──────────────────────┬────────────────────────────┐│
+    │  │       SMTP           │          FCM               ││
+    │  │  (Gmail, SendGrid)   │  (Firebase Cloud Message) ││
+    │  └──────────────────────┴────────────────────────────┘│
+    └───────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+                    KEY DESIGN PATTERNS IMPLEMENTED
+                    
+    ✅ Microservices Architecture
+    ✅ Message Queue Pattern (Pub/Sub)
+    ✅ Circuit Breaker Pattern
+    ✅ Retry Pattern with Exponential Backoff
+    ✅ Dead Letter Queue Pattern
+    ✅ Idempotency Pattern
+    ✅ Rate Limiting Pattern
+    ✅ Repository Pattern (Database Access)
+    ✅ Dependency Injection
+    ✅ Health Check Pattern
+    ✅ Correlation ID Pattern
+    ✅ API Gateway Pattern
+    ✅ Service Discovery Pattern
+    ✅ Saga Pattern (Distributed Transactions)
+
+═══════════════════════════════════════════════════════════════════════════════════
+```

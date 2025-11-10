@@ -1,0 +1,231 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for User Service
+  user-db:
+    image: postgres:15
+    container_name: user-db
+    environment:
+      POSTGRES_DB: user_service_db
+      POSTGRES_USER: user_service
+      POSTGRES_PASSWORD: user_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Template Service
+  template-db:
+    image: postgres:15
+    container_name: template-db
+    environment:
+      POSTGRES_DB: template_service_db
+      POSTGRES_USER: template_service
+      POSTGRES_PASSWORD: template_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - template-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U template_service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Gateway Service
+  gateway-db:
+    image: postgres:15
+    container_name: gateway-db
+    environment:
+      POSTGRES_DB: gateway_service_db
+      POSTGRES_USER: gateway_service
+      POSTGRES_PASSWORD: gateway_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - gateway-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway_service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ for message queuing
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: ./user-service/Dockerfile
+    container_name: user-service
+    environment:
+      DATABASE_URL: postgresql://user_service:user_password@user-db:5432/user_service_db
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: your-secret-key-change-in-production
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    ports:
+      - "8001:8000"
+    depends_on:
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./user-service:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Template Service
+  template-service:
+    build:
+      context: .
+      dockerfile: ./template-service/Dockerfile
+    container_name: template-service
+    environment:
+      DATABASE_URL: postgresql://template_service:template_password@template-db:5432/template_service_db
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8002:8000"
+    depends_on:
+      template-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./template-service:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./api-gateway/Dockerfile
+    container_name: api-gateway
+    environment:
+      DATABASE_URL: postgresql://gateway_service:gateway_password@gateway-db:5432/gateway_service_db
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      USER_SERVICE_URL: http://user-service:8000
+      TEMPLATE_SERVICE_URL: http://template-service:8000
+      SECRET_KEY: your-secret-key-change-in-production
+    ports:
+      - "8000:8000"
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      template-service:
+        condition: service_started
+    volumes:
+      - ./api-gateway:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Email Service
+  email-service:
+    build:
+      context: .
+      dockerfile: ./email-service/Dockerfile
+    container_name: email-service
+    restart: always
+    environment:
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+      TEMPLATE_SERVICE_URL: http://template-service:8000
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      GATEWAY_SERVICE_URL: http://api-gateway:8000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      template-service:
+        condition: service_started
+    volumes:
+      - ./email-service:/app
+    command: python -u app/main.py
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'from app.main import EmailWorker; worker = EmailWorker(); exit(0) if worker.check_connection() else exit(1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Push Service
+  push-service:
+    build:
+      context: .
+      dockerfile: ./push-service/Dockerfile
+    container_name: push-service
+    restart: always
+    environment:
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+      TEMPLATE_SERVICE_URL: http://template-service:8000
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE}
+      GATEWAY_SERVICE_URL: http://api-gateway:8000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      template-service:
+        condition: service_started
+    volumes:
+      - ./push-service:/app
+      - ${FCM_CREDENTIALS_PATH:-./fcm-credentials.json}:/app/fcm-credentials.json
+    command: python -u app/main.py
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'from app.main import PushWorker; worker = PushWorker(); exit(0) if worker.check_connection() else exit(1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  user-db-data:
+  template-db-data:
+  gateway-db-data:
+  redis-data:
+  rabbitmq-data:
