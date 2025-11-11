@@ -110,7 +110,13 @@ class QueueManager:
     ):
         """Publish message to queue with circuit breaker"""
         def _publish():
-            self.connect()
+            # Only reconnect if connection is actually closed
+            if not self.connection or self.connection.is_closed:
+                logger.info("Connection closed, reconnecting...")
+                self.connect()
+            elif not self.channel or not self.channel.is_open:
+                logger.info("Channel closed, reconnecting...")
+                self.connect()
             
             properties = pika.BasicProperties(
                 delivery_mode=2,  # Make message persistent

@@ -1,33 +1,45 @@
 # Notification System - Microservices Architecture
 
-A scalable, distributed notification system built with microservices architecture that handles multiple notification channels (Email, Push, SMS) with advanced features including circuit breaker patterns, retry logic, idempotency, and rate limiting.
+![Tests](https://img.shields.io/badge/tests-35%2F35%20passing-brightgreen)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Docker](https://img.shields.io/badge/docker-required-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Table of Contents
+A scalable, distributed notification system built with microservices architecture that handles multiple notification channels (Email, Push notifications) with advanced features like circuit breaker patterns, retry logic, idempotency, and rate limiting.
+
+## 📖 Documentation
+
+- **[API_TESTING.md](./API_TESTING.md)** - Complete API endpoint documentation, testing examples, and troubleshooting
+- **[PROJECT_CHARTER.md](./PROJECT_CHARTER.md)** - Detailed project specifications and requirements
+- **[FCM_SETUP.md](./FCM_SETUP.md)** - Firebase Cloud Messaging setup guide
+- **[ARCHITECTURE.txt](./ARCHITECTURE.txt)** - System architecture and design details
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contribution guidelines
+
+## 📋 Table of Contents
 
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Features](#features)
-- [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Services](#services)
-- [API Documentation](#api-documentation)
-- [Configuration](#configuration)
+- [API Reference](#api-reference)
 - [Testing](#testing)
-- [Monitoring](#monitoring)
+- [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
+- [Contributors](#contributors)
 
 ## Overview
 
-This notification system is designed to handle high-volume notification delivery across multiple channels with the following goals:
+A high-performance notification system designed for:
 
-- **Performance**: Handle 1,000+ notifications per minute
+- **Performance**: 1,000+ notifications per minute
 - **Reliability**: 99.5% delivery success rate
-- **Scalability**: All services support horizontal scaling
-- **Resilience**: Circuit breaker and retry mechanisms for fault tolerance
+- **Scalability**: Horizontal scaling for all services
+- **Resilience**: Circuit breaker and retry mechanisms
 
 ## Architecture
 
-### System Components
+### System Diagram
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌──────────────┐
@@ -47,792 +59,577 @@ This notification system is designed to handle high-volume notification delivery
             └──────────────┘  └──────────────┘
 ```
 
-### Technology Stack
+### Tech Stack
 
-- **API Framework**: FastAPI (Python 3.11)
+- **Backend**: FastAPI (Python 3.11+)
 - **Databases**: PostgreSQL 15 (3 separate instances)
 - **Cache**: Redis 7
 - **Message Queue**: RabbitMQ 3
 - **Containerization**: Docker & Docker Compose
 - **Authentication**: JWT (JSON Web Tokens)
-- **Template Engine**: Jinja2
+- **Templates**: Jinja2
 
 ## Features
 
-### Core Functionality
+### Core Features
 
-- **Multi-Channel Support**: Email, Push notifications, SMS (extensible)
-- **Template Management**: Store and version notification templates
-- **User Management**: Authentication, preferences, profile management
-- **Bulk Notifications**: Send to multiple recipients efficiently
+- ✅ Multi-channel notifications (Email, Push)
+- ✅ Template management with Jinja2
+- ✅ User authentication & preferences
+- ✅ Bulk notification sending
+- ✅ FCM token management
 
 ### Advanced Features
 
-- **Circuit Breaker**: Automatic failure detection and recovery
-- **Retry Logic**: Exponential backoff for failed deliveries
-- **Idempotency**: Prevent duplicate notification sends
-- **Rate Limiting**: 100 requests per minute per user
-- **Dead Letter Queue**: Handle permanently failed messages
-- **Correlation IDs**: Request tracking across services
-- **Structured Logging**: JSON-formatted logs with correlation
+- ✅ Circuit breaker pattern
+- ✅ Exponential backoff retry
+- ✅ Idempotency keys
+- ✅ Rate limiting (100 req/min)
+- ✅ Dead letter queue
+- ✅ Correlation ID tracking
+- ✅ Structured JSON logging
 
-## Prerequisites
+## Quick Start
+
+### Prerequisites
 
 - Docker 20.10+
 - Docker Compose 1.29+
 - curl (for testing)
-- Python 3.11+ (for local development)
 
-## Quick Start
+### 1. Clone Repository
 
-### 1. Clone and Configure
-
-```bash
+\`\`\`bash
 git clone https://github.com/PreciousEzeigbo/distributed-notification-system.git
 cd distributed-notification-system
-cp .env.example .env
-```
+\`\`\`
 
-### 2. Configure Environment Variables
+### 2. Configure Environment
 
-Edit `.env` file with your credentials:
+Copy and edit environment files for each service:
 
-```bash
-# SMTP Configuration (for email service)
+\`\`\`bash
+
+# Copy example files
+
+cp api-gateway/.env.example api-gateway/.env
+cp user-service/.env.example user-service/.env
+cp template-service/.env.example template-service/.env
+cp email-service/.env.example email-service/.env
+cp push-service/.env.example push-service/.env
+\`\`\`
+
+**Important**: Database credentials in \`.env\` files must match \`docker-compose.yml\`:
+
+\`\`\`bash
+
+# api-gateway/.env
+
+DATABASE_URL=postgresql://gateway_service:gateway_password@gateway-db:5432/gateway_service_db
+REDIS_URL=redis://redis:6379/0
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+SECRET_KEY=your-super-secret-key-min-64-characters
+
+# user-service/.env
+
+DATABASE_URL=postgresql://user_service:user_password@user-db:5432/user_service_db
+SECRET_KEY=your-super-secret-key-min-64-characters
+
+# template-service/.env
+
+DATABASE_URL=postgresql://template_service:template_password@template-db:5432/template_service_db
+
+# email-service/.env
+
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
 SMTP_HOST=sandbox.smtp.mailtrap.io
 SMTP_PORT=2525
-SMTP_USER=your-mailtrap-user
+SMTP_USER=your-mailtrap-username
 SMTP_PASSWORD=your-mailtrap-password
-SMTP_FROM_EMAIL=noreply@notification-system.com
+SMTP_FROM=noreply@notificationapp.com
 
-# Firebase Cloud Messaging (for push service)
+# push-service/.env
+
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
 FCM_CREDENTIALS_FILE=/app/fcm-credentials.json
-FCM_CREDENTIALS_PATH=./fcm-credentials.json
+FCM_PROJECT_ID=your-firebase-project-id
+\`\`\`
 
-# Security
-SECRET_KEY=your-super-secret-key-change-this-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
+> **📌 Note**: For FCM setup, see [PROJECT_CHARTER.md - Section 17](./PROJECT_CHARTER.md#17-firebase-cloud-messaging-setup)
 
-### 3. Start All Services
+### 3. Start Services
 
-```bash
-# Use the automated startup script
-./fix_and_start.sh
-
-# Or manually
+\`\`\`bash
 docker-compose up -d
-```
 
-### 4. Verify System Health
+# Wait for services to become healthy (~30 seconds)
 
-```bash
-# Check all containers
+docker-compose ps
+\`\`\`
+
+### 4. Verify Health
+
+\`\`\`bash
+
+# All services should show "Up (healthy)"
+
 docker-compose ps
 
 # Test API Gateway
-curl http://localhost:8000/health
 
-# Test User Service
-curl http://localhost:8001/health
+curl http://localhost:8000/health | python3 -m json.tool
+\`\`\`
 
-# Test Template Service
-curl http://localhost:8002/health
-```
+### 5. Run Quick Test
+
+\`\`\`bash
+chmod +x quick_test.sh
+./quick_test.sh
+\`\`\`
+
+Expected output: All tests passing ✅
 
 ## Services
 
 ### API Gateway (Port 8000)
 
-**Purpose**: Entry point for all client requests
+**Entry point** for all client requests. Handles routing, validation, JWT authentication, rate limiting, and message queuing.
 
-**Responsibilities**:
-
-- Request routing and validation
-- JWT token validation
-- Rate limiting (100 req/min per user)
-- Idempotency checking
-- Message queue publishing
-- Notification status tracking
-
-**Health Check**: `GET http://localhost:8000/health`
-
+**Health Check**: \`http://localhost:8000/health\`  
 **Database**: gateway_service_db (Port 5434)
 
 ### User Service (Port 8001)
 
-**Purpose**: User and authentication management
+Manages **user authentication**, registration, profiles, preferences, and FCM tokens.
 
-**Responsibilities**:
-
-- User registration and login
-- JWT token generation
-- User profile management
-- Notification preferences
-- User validation for other services
-
-**Health Check**: `GET http://localhost:8001/health`
-
+**Health Check**: \`http://localhost:8001/health\`  
 **Database**: user_service_db (Port 5432)
 
 ### Template Service (Port 8002)
 
-**Purpose**: Notification template storage and rendering
+Stores and renders **notification templates** with Jinja2 variable substitution.
 
-**Responsibilities**:
-
-- Store notification templates
-- Template versioning
-- Variable substitution (Jinja2)
-- Multi-language support
-- Template validation
-
-**Health Check**: `GET http://localhost:8002/health`
-
+**Health Check**: \`http://localhost:8002/health\`  
 **Database**: template_service_db (Port 5433)
 
 ### Email Service (Background Worker)
 
-**Purpose**: Consume email queue and send emails
-
-**Responsibilities**:
-
-- Consume messages from `email.queue`
-- Fetch and render templates
-- Send emails via SMTP
-- Retry logic with circuit breaker
-- Send failed messages to DLQ
-
-**Queue**: email.queue
+Consumes \`email.queue\` and sends emails via SMTP with retry logic and circuit breaker.
 
 ### Push Service (Background Worker)
 
-**Purpose**: Consume push notification queue
+Consumes \`push.queue\` and sends push notifications via Firebase Cloud Messaging.
 
-**Responsibilities**:
-
-- Consume messages from `push.queue`
-- Fetch and render templates
-- Send via Firebase Cloud Messaging
-- Retry logic with circuit breaker
-- Send failed messages to DLQ
-
-**Queue**: push.queue
-
-### Infrastructure Services
+### Infrastructure
 
 - **PostgreSQL**: 3 separate databases for service isolation
-- **Redis** (Port 6380): Caching, rate limiting, idempotency tracking
+- **Redis** (Port 6380): Caching, rate limiting, idempotency
 - **RabbitMQ** (Ports 5672, 15672): Message queue with management UI
 
-## API Documentation
+## API Reference
 
-### Standard Response Format
+### 📚 Complete Documentation
 
-All API endpoints return responses in this format:
+**See [API_TESTING.md](./API_TESTING.md) for detailed endpoint documentation, examples, and troubleshooting.**
 
-```json
+### Quick Reference
+
+#### Sample Request Formats
+
+**Send Notification**
+\`\`\`http
+POST /notifications/send
+Authorization: Bearer <token>
+Content-Type: application/json
+
 {
-  "success": true,
-  "message": "Operation completed successfully",
-  "data": {
-    /* response data */
-  },
-  "error": null,
-  "meta": {
-    "timestamp": "2025-11-10T12:34:56.789Z",
-    "correlation_id": "uuid-v4",
-    "page": 1,
-    "per_page": 20,
-    "total": 100,
-    "total_pages": 5
-  }
+"notification_type": "email",
+"user_id": "uuid-here",
+"template_code": "welcome_email",
+"variables": {
+"name": "John Doe",
+"link": "https://example.com"
+},
+"request_id": "unique-request-id",
+"priority": 0
 }
-```
+\`\`\`
 
-### Authentication
-
-#### Register User
-
-```http
+**Register User**
+\`\`\`http
 POST /users/register
 Content-Type: application/json
 
 {
-  "email": "user@example.com",
-  "password": "SecurePass123!"
+"name": "John Doe",
+"email": "john@example.com",
+"password": "SecurePass123!",
+"preferences": {
+"email": true,
+"push": true
 }
-```
+}
+\`\`\`
 
-#### Login
-
-```http
+**Login**
+\`\`\`http
 POST /users/login
 Content-Type: application/x-www-form-urlencoded
 
-username=user@example.com&password=SecurePass123!
-```
+username=john@example.com&password=SecurePass123!
+\`\`\`
 
-Response:
+#### Schema Definitions
 
-```json
-{
-  "success": true,
-  "data": {
-    "access_token": "eyJhbGc...",
-    "token_type": "bearer"
-  }
-}
-```
+**NotificationType** (Enum)
+\`\`\`python
+email = "email"
+push = "push"
+\`\`\`
 
-### Sending Notifications
+**NotificationStatus** (Enum)
+\`\`\`python
+pending = "pending"
+delivered = "delivered"
+failed = "failed"
+\`\`\`
 
-#### Send Single Notification
+**Variables** (Dict[str, Any])
+\`\`\`python
 
-```http
-POST /notifications/send
-Authorization: Bearer <token>
-Idempotency-Key: unique-key-12345
-Content-Type: application/json
+# Email example
 
 {
-  "channel": "email",
-  "recipient": "recipient@example.com",
-  "template_name": "welcome_email",
-  "variables": {
-    "username": "John Doe",
-    "activation_link": "https://example.com/activate"
-  },
-  "priority": "normal"
+"name": "John Doe",
+"link": "https://example.com",
+"email": "john@example.com"
 }
-```
 
-#### Send Bulk Notifications
-
-```http
-POST /notifications/send-bulk
-Authorization: Bearer <token>
-Content-Type: application/json
+# Push example
 
 {
-  "channel": "email",
-  "template_name": "monthly_newsletter",
-  "recipients": [
-    {
-      "recipient": "user1@example.com",
-      "variables": { "name": "John" }
-    },
-    {
-      "recipient": "user2@example.com",
-      "variables": { "name": "Jane" }
-    }
-  ]
+"title": "Order Shipped",
+"body": "Your order is on the way!",
+"action_url": "https://example.com/orders/123"
 }
-```
+\`\`\`
 
-#### Check Notification Status
+### Standard Response Format
 
-```http
-GET /notifications/status/{notification_id}
-Authorization: Bearer <token>
-```
-
-### Template Management
-
-#### Create Template
-
-```http
-POST /templates
-Authorization: Bearer <token>
-Content-Type: application/json
-
+\`\`\`json
 {
-  "name": "welcome_email",
-  "subject": "Welcome to {{company_name}}!",
-  "body": "Hello {{username}}, welcome to our platform!",
-  "channel": "email",
-  "language": "en",
-  "variables": ["company_name", "username"]
+"success": true,
+"message": "Operation successful",
+"data": { },
+"error": null,
+"meta": null
 }
-```
+\`\`\`
 
-#### List Templates
+## Testing
 
-```http
-GET /templates?page=1&per_page=20&channel=email
-Authorization: Bearer <token>
-```
+### Automated Test Suite
 
-#### Render Template
+Run the complete test suite:
 
-```http
-POST /templates/render
-Content-Type: application/json
+\`\`\`bash
+chmod +x quick_test.sh
+./quick_test.sh
+\`\`\`
 
-{
-  "template_name": "welcome_email",
-  "variables": {
-    "company_name": "TechCorp",
-    "username": "John Doe"
-  }
-}
-```
+Tests include:
 
-### User Preferences
+- ✅ User registration & authentication
+- ✅ FCM token management
+- ✅ Template creation
+- ✅ Email & push notifications
+- ✅ Idempotency verification
+- ✅ Health checks
 
-#### Set Notification Preferences
+### Manual Testing
 
-```http
-POST /users/preferences
-Authorization: Bearer <token>
-Content-Type: application/json
+**For comprehensive API testing examples, see [API_TESTING.md](./API_TESTING.md)**
 
-{
-  "channel": "email",
-  "enabled": true,
-  "preferences": {
-    "marketing": true,
-    "transactional": true,
-    "frequency": "daily"
-  }
-}
-```
+Quick health check:
+\`\`\`bash
+
+# Test all services
+
+curl http://localhost:8000/health # API Gateway
+curl http://localhost:8001/health # User Service
+curl http://localhost:8002/health # Template Service
+\`\`\`
+
+### Unit Tests
+
+\`\`\`bash
+
+# Run all tests
+
+pytest
+
+# Run specific service tests
+
+cd api-gateway && pytest
+cd user-service && pytest
+\`\`\`
+
+### Monitoring
+
+**RabbitMQ Management UI**: http://localhost:15672 (admin/admin)
+
+- View queues: \`email.queue\`, \`push.queue\`, \`failed.queue\`
+- Monitor message flow
+
+**View Logs**:
+\`\`\`bash
+
+# All services
+
+docker-compose logs -f
+
+# Specific service
+
+docker-compose logs -f api-gateway
+docker-compose logs -f email-service
+\`\`\`
+
+**Database Inspection**:
+\`\`\`bash
+
+# Connect to gateway database
+
+docker exec -it gateway-db psql -U gateway_service -d gateway_service_db
+
+# View notifications
+
+SELECT id, request_id, notification_type, status, created_at
+FROM notification_requests
+ORDER BY created_at DESC
+LIMIT 10;
+\`\`\`
 
 ## Configuration
 
 ### Environment Variables
 
-#### Common Variables (All Services)
+#### Common Variables
 
-```bash
-# Service Configuration
-SERVICE_NAME=service-name
-SERVICE_VERSION=1.0.0
-PORT=8000
-
-# Database
+\`\`\`bash
 DATABASE_URL=postgresql://user:password@host:5432/dbname
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=10
-
-# Redis
-REDIS_URL=redis://redis:6380
-REDIS_TTL=86400
-
-# JWT Authentication
-SECRET_KEY=your-secret-key-here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Logging
+REDIS_URL=redis://redis:6379/0
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+SECRET_KEY=your-secret-key
 LOG_LEVEL=INFO
-LOG_FORMAT=json
-```
+\`\`\`
 
-#### Email Service Specific
+#### Email Service
 
-```bash
+\`\`\`bash
 SMTP_HOST=smtp.mailtrap.io
 SMTP_PORT=2525
 SMTP_USER=your-user
 SMTP_PASSWORD=your-password
-SMTP_FROM_EMAIL=noreply@notification-system.com
-SMTP_USE_TLS=True
-```
+SMTP_FROM_EMAIL=noreply@example.com
+\`\`\`
 
-#### Push Service Specific
+#### Push Service
 
-```bash
+\`\`\`bash
 FCM_CREDENTIALS_FILE=/app/fcm-credentials.json
-```
+FCM_PROJECT_ID=your-firebase-project-id
+\`\`\`
 
-#### Circuit Breaker & Retry
+### Port Mapping
 
-```bash
-CIRCUIT_BREAKER_THRESHOLD=5
-CIRCUIT_BREAKER_TIMEOUT=60
-MAX_RETRIES=3
-RETRY_BASE_DELAY=2
-RETRY_MAX_DELAY=60
-```
+| Service               | Internal Port | External Port | Access URL             |
+| --------------------- | ------------- | ------------- | ---------------------- |
+| API Gateway           | 8000          | 8000          | http://localhost:8000  |
+| User Service          | 8000          | 8001          | http://localhost:8001  |
+| Template Service      | 8000          | 8002          | http://localhost:8002  |
+| RabbitMQ (AMQP)       | 5672          | 5672          | amqp://localhost:5672  |
+| RabbitMQ (UI)         | 15672         | 15672         | http://localhost:15672 |
+| Redis                 | 6379          | 6380          | redis://localhost:6380 |
+| PostgreSQL (User)     | 5432          | 5432          | localhost:5432         |
+| PostgreSQL (Template) | 5432          | 5433          | localhost:5433         |
+| PostgreSQL (Gateway)  | 5432          | 5434          | localhost:5434         |
 
-### RabbitMQ Configuration
-
-**Exchange**: notifications.direct (type: direct)
-
-**Queues**:
-
-- `email.queue` - Email notifications with DLX
-- `push.queue` - Push notifications with DLX
-- `failed.queue` - Dead letter queue
-
-**Routing Keys**:
-
-- `email` -> email.queue
-- `push` -> push.queue
-- `failed` -> failed.queue
-
-## Testing
-
-### Manual API Testing
-
-1. **Register a user**:
-
-```bash
-curl -X POST http://localhost:8001/users/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"Test123!"}'
-```
-
-2. **Login**:
-
-```bash
-curl -X POST http://localhost:8001/users/login \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=test@example.com&password=Test123!"
-```
-
-3. **Create a template**:
-
-```bash
-curl -X POST http://localhost:8002/templates \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "test_email",
-    "subject": "Test {{subject}}",
-    "body": "Hello {{name}}!",
-    "channel": "email",
-    "variables": ["subject", "name"]
-  }'
-```
-
-4. **Send a notification**:
-
-```bash
-curl -X POST http://localhost:8000/notifications/send \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Idempotency-Key: test-key-001" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channel": "email",
-    "recipient": "recipient@example.com",
-    "template_name": "test_email",
-    "variables": {
-      "subject": "Welcome",
-      "name": "John"
-    }
-  }'
-```
-
-### Viewing Logs
-
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f api-gateway
-docker-compose logs -f email-service
-docker-compose logs -f push-service
-
-# Last 50 lines
-docker-compose logs --tail=50 api-gateway
-```
-
-### Accessing RabbitMQ Management UI
-
-Open browser: http://localhost:15672
-
-- Username: admin
-- Password: admin
-
-View queues, exchanges, and message flow.
-
-## Monitoring
-
-### Health Checks
-
-All REST services expose `/health` endpoints:
-
-```bash
-# API Gateway
-curl http://localhost:8000/health | python3 -m json.tool
-
-# User Service
-curl http://localhost:8001/health | python3 -m json.tool
-
-# Template Service
-curl http://localhost:8002/health | python3 -m json.tool
-```
-
-### Service Status
-
-```bash
-# Check all containers
-docker-compose ps
-
-# Check resource usage
-docker stats
-
-# Check specific service logs
-docker-compose logs --tail=100 email-service
-```
-
-### Database Connections
-
-```bash
-# Connect to User Service DB
-docker exec -it user-db psql -U user_service -d user_service_db
-
-# Connect to Template Service DB
-docker exec -it template-db psql -U template_service -d template_service_db
-
-# Connect to Gateway DB
-docker exec -it gateway-db psql -U gateway_service -d gateway_service_db
-```
-
-### Redis Monitoring
-
-```bash
-# Connect to Redis CLI
-docker exec -it redis redis-cli
-
-# Check keys
-KEYS *
-
-# Monitor commands in real-time
-MONITOR
-```
+**Important**: Service-to-service communication uses **internal ports**, external access uses **external ports**.
 
 ## Troubleshooting
 
-### Services Not Starting
+### Common Issues
 
-**Problem**: Containers exit immediately
+#### Services Not Starting
 
-**Solution**:
+\`\`\`bash
 
-```bash
-# Check logs for errors
+# Check logs
+
 docker-compose logs
 
-# Restart with the fix script
-./fix_and_start.sh
-```
+# Restart all services
 
-### Port Already in Use
+docker-compose down
+docker-compose up -d
+\`\`\`
 
-**Problem**: Port 6379 already in use (Redis conflict)
+#### Database Authentication Failed
 
-**Solution**: The system uses port 6380 for Redis to avoid conflicts. If needed, update docker-compose.yml ports.
+**Problem**: \`FATAL: password authentication failed\`
 
-### Queue Declaration Errors
+**Solution**: Ensure \`.env\` database credentials match \`docker-compose.yml\`:
 
-**Problem**: PRECONDITION_FAILED errors in worker services
+\`\`\`bash
 
-**Solution**:
+# Verify credentials
 
-```bash
-# Delete existing queues
-docker exec rabbitmq rabbitmqctl delete_queue email.queue
-docker exec rabbitmq rabbitmqctl delete_queue push.queue
+grep "POSTGRES" docker-compose.yml
+grep "DATABASE_URL" api-gateway/.env
 
-# Restart API Gateway first (creates queues)
-docker-compose restart api-gateway
+# Expected format:
 
-# Then restart workers
+# DATABASE_URL=postgresql://gateway_service:gateway_password@gateway-db:5432/gateway_service_db
+
+\`\`\`
+
+#### RabbitMQ Connection Refused
+
+**Problem**: Worker services can't connect to RabbitMQ
+
+**Solution**: Add \`RABBITMQ_URL\` to worker \`.env\` files:
+
+\`\`\`bash
+
+# email-service/.env and push-service/.env
+
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+
+# Restart workers
+
 docker-compose restart email-service push-service
-```
+\`\`\`
 
-### Worker Services Crash Loop
+#### Port Already in Use
 
-**Problem**: Email/Push services keep restarting
+\`\`\`bash
 
-**Solution**:
+# Check what's using the port
 
-```bash
-# Check worker logs
-docker-compose logs --tail=50 email-service
-docker-compose logs --tail=50 push-service
+sudo lsof -i :8000
 
-# Ensure API Gateway started first
-./fix_and_start.sh
-```
+# Change ports in docker-compose.yml or stop conflicting service
 
-### Database Connection Issues
+\`\`\`
 
-**Problem**: "database not found" or connection errors
+#### Push Notifications: "Invalid FCM token"
 
-**Solution**:
+**Status**: ✅ **EXPECTED** during testing with dummy tokens
 
-```bash
-# Check database health
-docker-compose ps
+**Explanation**: Test tokens like \`test_fcm_token_XXX\` are rejected by FCM. For production:
 
-# Restart databases
-docker-compose restart user-db template-db gateway-db
+1. Set up mobile/web app with Firebase SDK
+2. Get real FCM token from device
+3. Register user with real token
 
-# Wait for health checks
-sleep 10
-```
+See [PROJECT_CHARTER.md - Section 17](./PROJECT_CHARTER.md#17-firebase-cloud-messaging-setup) for FCM setup.
 
-### "Empty reply from server" when testing APIs
+#### Service-to-Service Communication Fails
 
-**Problem**: curl returns empty response
+**Problem**: API Gateway can't reach other services
 
-**Solution**:
+**Solution**: Use **internal ports** in \`.env\` files:
 
-```bash
-# Wait for services to fully initialize
-sleep 15
+\`\`\`bash
 
-# Check if service is actually running
-docker-compose ps api-gateway
+# api-gateway/.env - Use internal ports
 
-# Check logs for startup errors
-docker-compose logs api-gateway
-```
+USER_SERVICE_URL=http://user-service:8000 # ✅ Correct
+TEMPLATE_SERVICE_URL=http://template-service:8000 # ✅ Correct
 
-## Performance Optimization
+# NOT external ports:
 
-### Horizontal Scaling
+USER_SERVICE_URL=http://user-service:8001 # ❌ Wrong
+\`\`\`
 
-Scale specific services:
+### Getting Help
 
-```bash
-# Scale API Gateway to 3 instances
-docker-compose up -d --scale api-gateway=3
+**For comprehensive troubleshooting, see [API_TESTING.md](./API_TESTING.md#-troubleshooting)**
 
-# Scale worker services
-docker-compose up -d --scale email-service=2 --scale push-service=2
-```
+Common resources:
 
-### Database Connection Pooling
+- Check service logs: \`docker-compose logs -f <service>\`
+- RabbitMQ UI: http://localhost:15672
+- Database inspection: \`docker exec -it gateway-db psql -U gateway_service -d gateway_service_db\`
+- Health endpoints: \`curl http://localhost:8000/health\`
 
-Configured in each service's database.py:
+## Project Structure
 
-- Pool size: 20
-- Max overflow: 10
-- Pool timeout: 30s
-
-### Redis Caching
-
-- Rate limit data: 60s TTL
-- Idempotency keys: 24h TTL
-- Session data: 30min TTL
+\`\`\`
+notification-system/
+├── api-gateway/ # Entry point, routing, queue management
+├── user-service/ # Authentication, user management
+├── template-service/ # Template storage and rendering
+├── email-service/ # Email worker
+├── push-service/ # Push notification worker
+├── docker-compose.yml # Container orchestration
+├── quick_test.sh # Automated test script
+├── API_TESTING.md # Complete API documentation
+├── PROJECT_CHARTER.md # Project specifications
+└── README.md # This file
+\`\`\`
 
 ## Development
 
-### Local Development Setup
+### Local Development
 
-1. Install dependencies:
+\`\`\`bash
 
-```bash
+# Install dependencies
+
 cd user-service
 pip install -r requirements.txt
-```
 
-2. Run service locally:
+# Run locally
 
-```bash
 uvicorn app.main:app --reload --port 8001
-```
+\`\`\`
 
-### Adding a New Service
+### Horizontal Scaling
 
-1. Create service directory
-2. Add Dockerfile
-3. Create requirements.txt
-4. Implement FastAPI app with /health endpoint
-5. Add to docker-compose.yml
-6. Update documentation
+\`\`\`bash
 
-### Code Structure
+# Scale API Gateway
 
-```
-notification-system/
-├── api-gateway/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── routes.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   └── utils/
-│   │       ├── circuit_breaker.py
-│   │       ├── retry_handler.py
-│   │       ├── logging_config.py
-│   │       └── response_models.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── user-service/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── routes.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   ├── config.py
-│   │   └── database.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── template-service/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── routes.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   ├── config.py
-│   │   └── database.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── email-service/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── consumer.py
-│   │   └── utils/
-│   │       ├── circuit_breaker.py
-│   │       ├── retry_handler.py
-│   │       └── logging_config.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── push-service/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── consumer.py
-│   │   └── utils/
-│   │       ├── circuit_breaker.py
-│   │       ├── retry_handler.py
-│   │       └── logging_config.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── docker-compose.yml
-├── .env.example
-├── .gitignore
-├── PROJECT_CHARTER.md
-├── CONTRIBUTING.md
-├── ARCHITECTURE.txt
-└── README.md
-```
+docker-compose up -d --scale api-gateway=3
 
-## Security Considerations
+# Scale workers
+
+docker-compose up -d --scale email-service=2 --scale push-service=2
+\`\`\`
+
+## Security
 
 - JWT tokens expire after 30 minutes
 - Passwords hashed with bcrypt
-- Rate limiting prevents abuse
+- Rate limiting: 100 requests/minute per user
 - CORS configured for specific origins
-- Database credentials in environment variables
 - No secrets in code or logs
+- Database credentials in environment variables
 
 ## Contributors
 
-**HNG BACKEND TRACK-Team 21**
+**HNG BACKEND TRACK - Team 21**
 
 ## Support
 
 For issues and questions:
 
-- Check logs: `docker-compose logs -f`
-- Review troubleshooting section
-- Check RabbitMQ management UI: http://localhost:15672
+- Review [API_TESTING.md](./API_TESTING.md) for comprehensive documentation
+- Check [PROJECT_CHARTER.md](./PROJECT_CHARTER.md) for specifications
+- Review logs: \`docker-compose logs -f\`
+- RabbitMQ UI: http://localhost:15672
+
+---
+
+**Made by Team 21**

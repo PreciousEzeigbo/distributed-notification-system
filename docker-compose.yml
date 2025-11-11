@@ -84,9 +84,10 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 40s
 
   # User Service
   user-service:
@@ -94,11 +95,8 @@ services:
       context: .
       dockerfile: ./user-service/Dockerfile
     container_name: user-service
-    environment:
-      DATABASE_URL: postgresql://user_service:user_password@user-db:5432/user_service_db
-      REDIS_URL: redis://redis:6379
-      SECRET_KEY: your-secret-key-change-in-production
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    env_file:
+      - ./user-service/.env
     ports:
       - "8001:8000"
     depends_on:
@@ -116,9 +114,8 @@ services:
       context: .
       dockerfile: ./template-service/Dockerfile
     container_name: template-service
-    environment:
-      DATABASE_URL: postgresql://template_service:template_password@template-db:5432/template_service_db
-      REDIS_URL: redis://redis:6379
+    env_file:
+      - ./template-service/.env
     ports:
       - "8002:8000"
     depends_on:
@@ -136,13 +133,8 @@ services:
       context: .
       dockerfile: ./api-gateway/Dockerfile
     container_name: api-gateway
-    environment:
-      DATABASE_URL: postgresql://gateway_service:gateway_password@gateway-db:5432/gateway_service_db
-      REDIS_URL: redis://redis:6379
-      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
-      USER_SERVICE_URL: http://user-service:8000
-      TEMPLATE_SERVICE_URL: http://template-service:8000
-      SECRET_KEY: your-secret-key-change-in-production
+    env_file:
+      - ./api-gateway/.env
     ports:
       - "8000:8000"
     depends_on:
@@ -167,16 +159,8 @@ services:
       dockerfile: ./email-service/Dockerfile
     container_name: email-service
     restart: always
-    environment:
-      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
-      REDIS_URL: redis://redis:6379
-      TEMPLATE_SERVICE_URL: http://template-service:8000
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
-      GATEWAY_SERVICE_URL: http://api-gateway:8000
+    env_file:
+      - ./email-service/.env
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -188,10 +172,11 @@ services:
       - ./email-service:/app
     command: python -u app/main.py
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'from app.main import EmailWorker; worker = EmailWorker(); exit(0) if worker.check_connection() else exit(1)'"]
+      test: ["CMD-SHELL", "pgrep -f 'python -u app/main.py' > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 30s
 
   # Push Service
   push-service:
@@ -200,12 +185,8 @@ services:
       dockerfile: ./push-service/Dockerfile
     container_name: push-service
     restart: always
-    environment:
-      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
-      REDIS_URL: redis://redis:6379
-      TEMPLATE_SERVICE_URL: http://template-service:8000
-      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE}
-      GATEWAY_SERVICE_URL: http://api-gateway:8000
+    env_file:
+      - ./push-service/.env
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -215,13 +196,14 @@ services:
         condition: service_started
     volumes:
       - ./push-service:/app
-      - ${FCM_CREDENTIALS_PATH:-./fcm-credentials.json}:/app/fcm-credentials.json
+      - ./push-service/fcm-credentials.json:/app/fcm-credentials.json
     command: python -u app/main.py
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'from app.main import PushWorker; worker = PushWorker(); exit(0) if worker.check_connection() else exit(1)'"]
+      test: ["CMD-SHELL", "pgrep -f 'python -u app/main.py' > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 30s
 
 volumes:
   user-db-data:

@@ -97,7 +97,7 @@ def send_notification(
         notification_type=notification.notification_type.value,
         template_code=notification.template_code,
         recipient=recipient,
-        variables=notification.variables.model_dump(mode='json'),  # Properly serialize HttpUrl
+        variables=notification.variables,  # Already a dict
         status=models.NotificationStatus.pending,
         priority=notification.priority,
         extra_metadata=notification.extra_metadata
@@ -117,7 +117,7 @@ def send_notification(
             "notification_type": notification.notification_type.value,
             "template_code": notification.template_code,
             "recipient": recipient,
-            "variables": notification.variables.model_dump(mode='json'),  # Properly serialize HttpUrl
+            "variables": notification.variables,  # Already a dict
             "priority": notification.priority,
             "extra_metadata": notification.extra_metadata,
             "retry_count": 0
@@ -191,7 +191,7 @@ def send_bulk_notifications(
                 priority=0
             )
             
-            # Send notification (reuse single send logic)
+            # Send notification
             result = send_notification(notification, db, correlation_id)
             notifications.append(result.data)
             
@@ -292,7 +292,6 @@ def update_notification_status(
     db: Session = Depends(get_db)
 ):
     """Update notification status (used by worker services)"""
-    # Parse notification_id from string to int
     try:
         notification_id = int(status_update.notification_id)
     except ValueError:

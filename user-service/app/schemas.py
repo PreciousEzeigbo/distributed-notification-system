@@ -52,6 +52,10 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class FCMTokenRequest(BaseModel):
+    """Request body for registering FCM token"""
+    fcm_token: str = Field(..., min_length=1, description="Firebase Cloud Messaging device token")
+
 class UserResponse(UserBase):
     id: UUID
     push_token: Optional[str] = None
