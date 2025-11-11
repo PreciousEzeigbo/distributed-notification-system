@@ -99,16 +99,16 @@ A high-performance notification system designed for:
 
 ### 1. Clone Repository
 
-\`\`\`bash
+```bash
 git clone https://github.com/PreciousEzeigbo/distributed-notification-system.git
 cd distributed-notification-system
-\`\`\`
+```
 
 ### 2. Configure Environment
 
 Copy and edit environment files for each service:
 
-\`\`\`bash
+```bash
 
 # Copy example files
 
@@ -117,11 +117,11 @@ cp user-service/.env.example user-service/.env
 cp template-service/.env.example template-service/.env
 cp email-service/.env.example email-service/.env
 cp push-service/.env.example push-service/.env
-\`\`\`
+```
 
 **Important**: Database credentials in \`.env\` files must match \`docker-compose.yml\`:
 
-\`\`\`bash
+```bash
 
 # api-gateway/.env
 
@@ -129,16 +129,22 @@ DATABASE_URL=postgresql://gateway_service:gateway_password@gateway-db:5432/gatew
 REDIS_URL=redis://redis:6379/0
 RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
 SECRET_KEY=your-super-secret-key-min-64-characters
+```
 
+```
 # user-service/.env
 
 DATABASE_URL=postgresql://user_service:user_password@user-db:5432/user_service_db
 SECRET_KEY=your-super-secret-key-min-64-characters
+```
 
+```
 # template-service/.env
 
 DATABASE_URL=postgresql://template_service:template_password@template-db:5432/template_service_db
+```
 
+```
 # email-service/.env
 
 RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
@@ -147,29 +153,31 @@ SMTP_PORT=2525
 SMTP_USER=your-mailtrap-username
 SMTP_PASSWORD=your-mailtrap-password
 SMTP_FROM=noreply@notificationapp.com
+```
 
+```
 # push-service/.env
 
 RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
 FCM_CREDENTIALS_FILE=/app/fcm-credentials.json
 FCM_PROJECT_ID=your-firebase-project-id
-\`\`\`
+```
 
 > **📌 Note**: For FCM setup, see [PROJECT_CHARTER.md - Section 17](./PROJECT_CHARTER.md#17-firebase-cloud-messaging-setup)
 
 ### 3. Start Services
 
-\`\`\`bash
+```bash
 docker-compose up -d
 
 # Wait for services to become healthy (~30 seconds)
 
 docker-compose ps
-\`\`\`
+```
 
 ### 4. Verify Health
 
-\`\`\`bash
+```bash
 
 # All services should show "Up (healthy)"
 
@@ -178,14 +186,14 @@ docker-compose ps
 # Test API Gateway
 
 curl http://localhost:8000/health | python3 -m json.tool
-\`\`\`
+```
 
 ### 5. Run Quick Test
 
-\`\`\`bash
+```bash
 chmod +x quick_test.sh
 ./quick_test.sh
-\`\`\`
+```
 
 Expected output: All tests passing ✅
 
@@ -195,22 +203,28 @@ Expected output: All tests passing ✅
 
 **Entry point** for all client requests. Handles routing, validation, JWT authentication, rate limiting, and message queuing.
 
-**Health Check**: \`http://localhost:8000/health\`  
+```
+**Health Check**: \`http://localhost:8000/health\`
 **Database**: gateway_service_db (Port 5434)
+```
 
 ### User Service (Port 8001)
 
 Manages **user authentication**, registration, profiles, preferences, and FCM tokens.
 
-**Health Check**: \`http://localhost:8001/health\`  
+```
+**Health Check**: \`http://localhost:8001/health\`
 **Database**: user_service_db (Port 5432)
+```
 
 ### Template Service (Port 8002)
 
 Stores and renders **notification templates** with Jinja2 variable substitution.
 
-**Health Check**: \`http://localhost:8002/health\`  
+```
+**Health Check**: \`http://localhost:8002/health\`
 **Database**: template_service_db (Port 5433)
+```
 
 ### Email Service (Background Worker)
 
@@ -237,7 +251,8 @@ Consumes \`push.queue\` and sends push notifications via Firebase Cloud Messagin
 #### Sample Request Formats
 
 **Send Notification**
-\`\`\`http
+
+```http
 POST /notifications/send
 Authorization: Bearer <token>
 Content-Type: application/json
@@ -253,10 +268,11 @@ Content-Type: application/json
 "request_id": "unique-request-id",
 "priority": 0
 }
-\`\`\`
+```
 
 **Register User**
-\`\`\`http
+
+```http
 POST /users/register
 Content-Type: application/json
 
@@ -269,33 +285,37 @@ Content-Type: application/json
 "push": true
 }
 }
-\`\`\`
+```
 
 **Login**
-\`\`\`http
+
+```http
 POST /users/login
 Content-Type: application/x-www-form-urlencoded
 
 username=john@example.com&password=SecurePass123!
-\`\`\`
+```
 
 #### Schema Definitions
 
 **NotificationType** (Enum)
-\`\`\`python
+
+```python
 email = "email"
 push = "push"
-\`\`\`
+```
 
 **NotificationStatus** (Enum)
-\`\`\`python
+
+```python
 pending = "pending"
 delivered = "delivered"
 failed = "failed"
-\`\`\`
+```
 
 **Variables** (Dict[str, Any])
-\`\`\`python
+
+```python
 
 # Email example
 
@@ -312,19 +332,19 @@ failed = "failed"
 "body": "Your order is on the way!",
 "action_url": "https://example.com/orders/123"
 }
-\`\`\`
+```
 
 ### Standard Response Format
 
-\`\`\`json
+```json
 {
-"success": true,
-"message": "Operation successful",
-"data": { },
-"error": null,
-"meta": null
+  "success": true,
+  "message": "Operation successful",
+  "data": {},
+  "error": null,
+  "meta": null
 }
-\`\`\`
+```
 
 ## Testing
 
@@ -332,10 +352,10 @@ failed = "failed"
 
 Run the complete test suite:
 
-\`\`\`bash
+```bash
 chmod +x quick_test.sh
 ./quick_test.sh
-\`\`\`
+```
 
 Tests include:
 
@@ -351,18 +371,19 @@ Tests include:
 **For comprehensive API testing examples, see [API_TESTING.md](./API_TESTING.md)**
 
 Quick health check:
-\`\`\`bash
+
+```bash
 
 # Test all services
 
 curl http://localhost:8000/health # API Gateway
 curl http://localhost:8001/health # User Service
 curl http://localhost:8002/health # Template Service
-\`\`\`
+```
 
 ### Unit Tests
 
-\`\`\`bash
+```bash
 
 # Run all tests
 
@@ -372,7 +393,7 @@ pytest
 
 cd api-gateway && pytest
 cd user-service && pytest
-\`\`\`
+```
 
 ### Monitoring
 
@@ -382,7 +403,8 @@ cd user-service && pytest
 - Monitor message flow
 
 **View Logs**:
-\`\`\`bash
+
+```bash
 
 # All services
 
@@ -392,10 +414,11 @@ docker-compose logs -f
 
 docker-compose logs -f api-gateway
 docker-compose logs -f email-service
-\`\`\`
+```
 
 **Database Inspection**:
-\`\`\`bash
+
+```bash
 
 # Connect to gateway database
 
@@ -407,7 +430,7 @@ SELECT id, request_id, notification_type, status, created_at
 FROM notification_requests
 ORDER BY created_at DESC
 LIMIT 10;
-\`\`\`
+```
 
 ## Configuration
 
@@ -415,30 +438,30 @@ LIMIT 10;
 
 #### Common Variables
 
-\`\`\`bash
+```bash
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 REDIS_URL=redis://redis:6379/0
 RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
 SECRET_KEY=your-secret-key
 LOG_LEVEL=INFO
-\`\`\`
+```
 
 #### Email Service
 
-\`\`\`bash
+```bash
 SMTP_HOST=smtp.mailtrap.io
 SMTP_PORT=2525
 SMTP_USER=your-user
 SMTP_PASSWORD=your-password
 SMTP_FROM_EMAIL=noreply@example.com
-\`\`\`
+```
 
 #### Push Service
 
-\`\`\`bash
+```bash
 FCM_CREDENTIALS_FILE=/app/fcm-credentials.json
 FCM_PROJECT_ID=your-firebase-project-id
-\`\`\`
+```
 
 ### Port Mapping
 
@@ -462,7 +485,7 @@ FCM_PROJECT_ID=your-firebase-project-id
 
 #### Services Not Starting
 
-\`\`\`bash
+```bash
 
 # Check logs
 
@@ -472,7 +495,7 @@ docker-compose logs
 
 docker-compose down
 docker-compose up -d
-\`\`\`
+```
 
 #### Database Authentication Failed
 
@@ -480,7 +503,7 @@ docker-compose up -d
 
 **Solution**: Ensure \`.env\` database credentials match \`docker-compose.yml\`:
 
-\`\`\`bash
+```bash
 
 # Verify credentials
 
@@ -491,7 +514,7 @@ grep "DATABASE_URL" api-gateway/.env
 
 # DATABASE_URL=postgresql://gateway_service:gateway_password@gateway-db:5432/gateway_service_db
 
-\`\`\`
+```
 
 #### RabbitMQ Connection Refused
 
@@ -499,7 +522,7 @@ grep "DATABASE_URL" api-gateway/.env
 
 **Solution**: Add \`RABBITMQ_URL\` to worker \`.env\` files:
 
-\`\`\`bash
+```bash
 
 # email-service/.env and push-service/.env
 
@@ -508,11 +531,11 @@ RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
 # Restart workers
 
 docker-compose restart email-service push-service
-\`\`\`
+```
 
 #### Port Already in Use
 
-\`\`\`bash
+```bash
 
 # Check what's using the port
 
@@ -520,7 +543,7 @@ sudo lsof -i :8000
 
 # Change ports in docker-compose.yml or stop conflicting service
 
-\`\`\`
+```
 
 #### Push Notifications: "Invalid FCM token"
 
@@ -540,7 +563,7 @@ See [PROJECT_CHARTER.md - Section 17](./PROJECT_CHARTER.md#17-firebase-cloud-mes
 
 **Solution**: Use **internal ports** in \`.env\` files:
 
-\`\`\`bash
+```bash
 
 # api-gateway/.env - Use internal ports
 
@@ -550,7 +573,7 @@ TEMPLATE_SERVICE_URL=http://template-service:8000 # ✅ Correct
 # NOT external ports:
 
 USER_SERVICE_URL=http://user-service:8001 # ❌ Wrong
-\`\`\`
+```
 
 ### Getting Help
 
@@ -565,7 +588,7 @@ Common resources:
 
 ## Project Structure
 
-\`\`\`
+```
 notification-system/
 ├── api-gateway/ # Entry point, routing, queue management
 ├── user-service/ # Authentication, user management
@@ -577,13 +600,13 @@ notification-system/
 ├── API_TESTING.md # Complete API documentation
 ├── PROJECT_CHARTER.md # Project specifications
 └── README.md # This file
-\`\`\`
+```
 
 ## Development
 
 ### Local Development
 
-\`\`\`bash
+```bash
 
 # Install dependencies
 
@@ -593,11 +616,11 @@ pip install -r requirements.txt
 # Run locally
 
 uvicorn app.main:app --reload --port 8001
-\`\`\`
+```
 
 ### Horizontal Scaling
 
-\`\`\`bash
+```bash
 
 # Scale API Gateway
 
@@ -606,7 +629,7 @@ docker-compose up -d --scale api-gateway=3
 # Scale workers
 
 docker-compose up -d --scale email-service=2 --scale push-service=2
-\`\`\`
+```
 
 ## Security
 
