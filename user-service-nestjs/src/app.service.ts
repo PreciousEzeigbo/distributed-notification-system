@@ -18,7 +18,7 @@ export class AppService {
     try {
       // Test database connection
       await this.userRepository.query('SELECT 1');
-      
+
       return {
         success: true,
         message: 'User Service is healthy',

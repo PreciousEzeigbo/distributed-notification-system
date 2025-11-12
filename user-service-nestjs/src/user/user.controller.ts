@@ -22,7 +22,10 @@ export class UserController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() userData: Partial<User>): Promise<User> {
+  update(
+    @Param('id') id: string,
+    @Body() userData: Partial<User>,
+  ): Promise<User> {
     return this.userService.update(id, userData);
   }
 
