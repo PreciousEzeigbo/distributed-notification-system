@@ -32,10 +32,12 @@ export class AppService {
         },
       };
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       return {
         success: false,
         message: 'Service unhealthy',
-        error: error.message,
+        error: errorMessage,
         data: {
           status: 'unhealthy',
           service: 'user-service-nestjs',
