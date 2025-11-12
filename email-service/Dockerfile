@@ -8,15 +8,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY email-service/requirements.txt .
+COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared utilities
-
 # Copy application code
-COPY email-service /app
+COPY . /app
 
 # Run the worker
 CMD ["python", "-u", "app/main.py"]
