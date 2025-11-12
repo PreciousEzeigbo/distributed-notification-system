@@ -607,19 +607,35 @@ Response: 200 OK
 **Database:**
 
 ```
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
+# IMPORTANT: These credentials MUST match docker-compose.yml
+# API Gateway Database
+DATABASE_URL=postgresql://gateway_service:gateway_password@gateway-db:5432/gateway_service_db
+
+# User Service Database
+DATABASE_URL=postgresql://user_service:user_password@user-db:5432/user_service_db
+
+# Template Service Database
+DATABASE_URL=postgresql://template_service:template_password@template-db:5432/template_service_db
 ```
 
 **Redis:**
 
 ```
-REDIS_URL=redis://redis:6380
+# Use internal container port (6379), not external port (6380)
+REDIS_URL=redis://redis:6379/0
+REDIS_HOST=redis
+REDIS_PORT=6379
 ```
 
 **RabbitMQ:**
 
 ```
+# Full connection URL is REQUIRED for all services
 RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_USER=admin
+RABBITMQ_PASSWORD=admin
 ```
 
 **JWT Authentication:**
@@ -643,7 +659,10 @@ SMTP_FROM=noreply@yourapp.com
 
 ```
 FCM_CREDENTIALS_FILE=/app/fcm-credentials.json
+FCM_PROJECT_ID=your-firebase-project-id
 ```
+
+**Important:** The `fcm-credentials.json` file is **not included** in version control for security reasons. See [Firebase Cloud Messaging Setup](#firebase-cloud-messaging-setup) below for instructions on obtaining credentials.
 
 **Circuit Breaker:**
 
@@ -801,14 +820,407 @@ Refer to the `CONTRIBUTING.md` file for detailed guidelines on:
 - Code review guidelines
 - Testing requirements
 
-## 17. Additional Resources
+## 17. Firebase Cloud Messaging Setup
+
+### 17.1. Why FCM Credentials Are Not in the Repository
+
+The `fcm-credentials.json` file contains sensitive service account credentials including:
+
+- Private keys
+- Service account email
+- Project identifiers
+- Authentication tokens
+
+**Security Best Practice:** These credentials are excluded from version control via `.gitignore` to prevent unauthorized access and potential security breaches.
+
+### 17.2. How to Obtain FCM Credentials
+
+Create Your Own Firebase Project (For Independent Testing)\*\*
+
+1. Go to [Firebase Console](https://console.firebase.google.com/)
+2. Click "Add Project" or use existing project
+3. Navigate to **Project Settings** (gear icon) → **Service Accounts**
+4. Click **"Generate New Private Key"**
+5. Download the JSON file
+6. Rename to `fcm-credentials.json` and place in project root
+7. Update `push-service/.env`:
+   ```bash
+   FCM_PROJECT_ID=your-new-project-id
+   ```
+
+### 17.3. Verifying FCM Setup
+
+After obtaining credentials:
+
+```bash
+# Check file exists
+ls -la fcm-credentials.json
+
+# Verify it's in .gitignore
+cat .gitignore | grep fcm-credentials
+
+# Test push service
+docker-compose up push-service
+docker-compose logs push-service  # Should NOT show credential errors
+```
+
+### 17.4. Troubleshooting
+
+**Error: "FCM credentials file not found"**
+
+```bash
+# Solution: Ensure file exists in project root
+ls fcm-credentials.json
+```
+
+**Error: "Invalid FCM credentials"**
+
+```bash
+# Solution: Re-download from Firebase Console
+# Verify JSON format is valid
+cat fcm-credentials.json | python -m json.tool
+```
+
+**Error: "Permission denied for Firebase project"**
+
+```bash
+# Solution: Ensure service account has correct permissions
+# In Firebase Console: IAM & Admin → Grant "Firebase Cloud Messaging Admin" role
+```
+
+---
+
+## 18. Common Setup Issues and Solutions
+
+### 18.1. Database Connection Failures
+
+**Error:** `password authentication failed for user "gateway_user"`
+
+**Cause:** Database credentials in `.env` files don't match `docker-compose.yml`
+
+**Solution:**
+
+```bash
+# Check docker-compose.yml for correct credentials
+grep "POSTGRES_USER\|POSTGRES_PASSWORD" docker-compose.yml
+
+# Update .env files to match:
+# API Gateway: gateway_service:gateway_password
+# User Service: user_service:user_password
+# Template Service: template_service:template_password
+```
+
+### 18.2. RabbitMQ Connection Failures
+
+**Error:** `Failed to connect to RabbitMQ` or `NOT_FOUND - no queue 'email.queue'`
+
+**Cause:** Missing `RABBITMQ_URL` environment variable
+
+**Solution:**
+
+```bash
+# Add to all service .env files that use RabbitMQ:
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+
+# Services that need this:
+# - api-gateway/.env
+# - email-service/.env
+# - push-service/.env
+```
+
+### 18.3. Redis Connection Failures
+
+**Error:** `Error 111 connecting to localhost:6379. Connection refused.`
+
+**Cause:** Wrong Redis port or missing `REDIS_URL`
+
+**Solution:**
+
+```bash
+# In api-gateway/.env, use internal container port:
+REDIS_URL=redis://redis:6379/0
+REDIS_PORT=6379  # NOT 6380 (6380 is external port)
+```
+
+### 18.4. Worker Services Restarting
+
+**Error:** Email/Push services show "Restarting" status
+
+**Causes:**
+
+1. Missing `RABBITMQ_URL` in worker `.env` files
+2. RabbitMQ queues not created (API Gateway must start first)
+
+**Solution:**
+
+```bash
+# 1. Ensure RABBITMQ_URL is set in worker .env files
+# 2. Restart services in correct order:
+docker-compose down
+docker-compose up -d
+
+# 3. Check logs
+docker-compose logs -f email-service push-service
+```
+
+### 18.5. FCM Credentials Issues
+
+**Error:** `fcm-credentials.json: not a directory` or mount failures
+
+**Cause:** File doesn't exist or wrong path in docker-compose.yml
+
+**Solution:**
+
+```bash
+# 1. Ensure fcm-credentials.json exists in push-service/ directory
+ls -la push-service/fcm-credentials.json
+
+# 2. Verify docker-compose.yml volume mount:
+# volumes:
+#   - ./push-service/fcm-credentials.json:/app/fcm-credentials.json
+```
+
+### 18.6. Service Won't Recreate with New .env
+
+**Error:** Changes to `.env` files don't take effect
+
+**Cause:** Docker containers cache environment variables
+
+**Solution:**
+
+```bash
+# Method 1: Complete restart (recommended)
+docker-compose down
+docker-compose up -d
+
+# Method 2: Force recreate specific service
+docker-compose stop api-gateway
+docker-compose rm -f api-gateway
+docker-compose up -d api-gateway
+```
+
+### 18.7. Port Already in Use
+
+**Error:** `bind: address already in use`
+
+**Cause:** Another service is using the port
+
+**Solution:**
+
+```bash
+# Find what's using the port
+sudo lsof -i :8000
+sudo lsof -i :5432
+
+# Kill the process or change port in docker-compose.yml
+# Example: Change "8000:8000" to "8001:8000"
+```
+
+---
+
+## 19. Push Notification Testing
+
+### Automated Test Script
+
+We provide a comprehensive automated test script that validates the entire push notification flow:
+
+**Location:** `./test-push-notification.sh`
+
+**What It Tests:**
+
+1. ✅ Template creation in template-service
+2. ✅ User registration with FCM push token
+3. ✅ JWT authentication and token generation
+4. ✅ Notification queueing through API Gateway
+5. ✅ RabbitMQ message delivery to push.queue
+6. ✅ Push service consuming and processing messages
+7. ✅ Template rendering with variables
+8. ✅ FCM SDK initialization
+9. ✅ Attempt to send notification to Firebase
+
+### Expected Test Behavior
+
+**⚠️ Important:** The test script uses **dummy FCM tokens** (format: `test_fcm_token_XXXXXXXXX`).
+
+You will see this error in the logs:
+
+```
+Error sending push notification: The registration token is not a valid FCM registration token
+```
+
+**This is CORRECT and EXPECTED!** ✅
+
+It proves:
+
+- All microservices are properly configured and communicating
+- Messages successfully flow through RabbitMQ
+- The push-service renders templates correctly
+- Firebase SDK is initialized and attempts to send
+- FCM correctly rejects invalid tokens (security working as expected)
+
+### Production vs Testing Tokens
+
+**Test Tokens (Dummy):**
+
+```
+test_fcm_token_1234567890
+```
+
+- Used for backend testing
+- Validates system integration
+- FCM will reject them (expected)
+
+**Production Tokens (Real):**
+
+```
+cXY1ZmF6OThCYXdl...T0FBQUFBWTo (≈160 characters)
+```
+
+- Obtained from real mobile/web apps
+- Generated when users install your app
+- Valid for actual notification delivery
+
+### How to Obtain Real FCM Tokens
+
+**For Mobile Apps (Android/iOS):**
+
+1. Integrate Firebase SDK in your app
+2. Request notification permissions
+3. Call `FirebaseMessaging.getInstance().getToken()`
+4. Send token to your backend during user registration
+
+**For Web Apps:**
+
+```javascript
+import { getMessaging, getToken } from "firebase/messaging";
+
+const messaging = getMessaging();
+getToken(messaging, { vapidKey: "YOUR_VAPID_KEY" }).then((currentToken) => {
+  // Send currentToken to your server
+});
+```
+
+### Running the Test
+
+```bash
+# Make script executable (first time only)
+chmod +x test-push-notification.sh
+
+# Run the test
+./test-push-notification.sh
+```
+
+**Expected Output:**
+
+```
+==================================================
+  Push Notification Test Script
+==================================================
+
+Step 1: Creating push notification template...
+✓ Template created
+
+Step 2: Registering user with FCM token...
+✓ User created with ID: f5ed3917-61e9-4d52-8695-6e07b1892261
+
+Step 3: Logging in to get JWT token...
+✓ JWT token obtained
+
+Step 4: Sending push notification...
+✓ Notification queued with ID: 7
+
+Step 5: Checking notification status (waiting 5 seconds for processing)...
+⚠ Notification status: pending
+
+Step 6: Checking push service logs...
+[Shows FCM rejection of test token - this is expected]
+```
+
+### Interpreting Results
+
+**✅ Success Indicators:**
+
+- User registered successfully
+- JWT token obtained
+- Notification queued
+- Push service processes message
+- Template rendered
+- FCM SDK initialized
+- Error: "Invalid registration token" (proves FCM was called)
+
+**❌ Failure Indicators:**
+
+- "User service unavailable" → Check service URLs in .env
+- "Connection refused" → Check RABBITMQ_URL or TEMPLATE_SERVICE_URL
+- "Database authentication failed" → Verify DATABASE_URL credentials
+- "Circuit breaker is OPEN" → Previous failures triggered circuit breaker, wait 60s
+
+### Testing with Real Devices
+
+To test actual notification delivery:
+
+1. **Set up a mobile app** with Firebase SDK
+2. **Register a test user** with real FCM token:
+
+```bash
+curl -X POST http://localhost:8001/users/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "SecurePass123!",
+    "push_token": "REAL_FCM_TOKEN_FROM_DEVICE"
+  }'
+```
+
+3. **Send notification** using the test script or manual API call
+4. **Check device** for notification delivery
+
+### Monitoring Test Results
+
+**Check Notification Status:**
+
+```bash
+# View all notification requests
+docker exec -it gateway-db psql -U gateway_service -d gateway_service_db -c \
+  "SELECT id, request_id, status, error_message, created_at FROM notification_requests ORDER BY created_at DESC LIMIT 5;"
+```
+
+**Check RabbitMQ:**
+
+```bash
+# Open management UI
+open http://localhost:15672
+# Login: admin / admin
+# Navigate to Queues tab
+# View push.queue message statistics
+```
+
+**Check Push Service Logs:**
+
+```bash
+docker-compose logs --tail=50 -f push-service
+```
+
+### Common Test Issues
+
+| Issue                                             | Cause                       | Solution                                      |
+| ------------------------------------------------- | --------------------------- | --------------------------------------------- |
+| "User service unavailable"                        | Wrong internal port in .env | Use `http://user-service:8000` not `8001`     |
+| "Connection refused to template-service"          | Wrong internal port         | Use `http://template-service:8000` not `8002` |
+| "Stream connection lost" (RabbitMQ)               | Stale connection            | Fixed in current version - auto-reconnects    |
+| "Message.data must not contain non-string values" | FCM data payload issue      | Fixed in current version - auto-serializes    |
+| "Field required: name/link"                       | Missing required variables  | Include `name` and `link` in variables object |
+
+## 20. Additional Resources
 
 - **System Architecture**: See `ARCHITECTURE.txt` for detailed diagrams
-- **API Testing**: See `README.md` for example API calls
+- **API Testing**: See `README.md` for example API calls and detailed troubleshooting
+- **Automated Testing**: Run `./test-push-notification.sh` for end-to-end validation
 - **Development Setup**: See individual service READMEs
 
 ---
 
-**Document Version:** 2.0  
-**Last Updated:** November 10, 2025  
+**Document Version:** 2.1  
+**Last Updated:** November 11, 2025  
 **Team:** Group 21

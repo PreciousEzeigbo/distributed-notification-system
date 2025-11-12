@@ -1,0 +1,21 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/template-service",
+    "feat/user_service-nestjs",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "feat/template-service": "main",
+    "feat/user_service-nestjs": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "feat/template-service",
+    "feat/user_service-nestjs",
+    "origin"
+  ]
+}

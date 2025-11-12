@@ -33,17 +33,11 @@ class NotificationStatus(str, Enum):
     delivered = "delivered"
     failed = "failed"
 
-class UserData(BaseModel):
-    """User data for template variables"""
-    name: str
-    link: HttpUrl
-    meta: Optional[Dict[str, Any]] = None
-
 class NotificationRequest(BaseModel):
     notification_type: NotificationType
     user_id: UUID
     template_code: str  # Template name or path
-    variables: UserData
+    variables: Dict[str, Any]  # Generic dict for template variables
     request_id: str
     priority: int = 0  # 0=normal, 1=high, 2=urgent
     extra_metadata: Optional[Dict[str, Any]] = None  # renamed from 'metadata' (SQLAlchemy reserved word)
@@ -79,4 +73,6 @@ class BulkNotificationRequest(BaseModel):
     user_ids: List[UUID]
     notification_type: NotificationType
     template_code: str
-    variables: UserData
+    variables: Dict[str, Any]  # Generic dict for template variables
+
+

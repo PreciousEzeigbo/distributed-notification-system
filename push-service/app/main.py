@@ -37,20 +37,30 @@ class PushWorker:
             max_delay=RETRY_MAX_DELAY
         )
     
-    def connect(self):
-        """Connects to RabbitMQ."""
-        try:
-            parameters = pika.URLParameters(self.rabbitmq_url)
-            self.connection = pika.BlockingConnection(parameters)
-            self.channel = self.connection.channel()
-            
-            # Sets QoS to process one message at a time
-            self.channel.basic_qos(prefetch_count=1)
-            
-            logger.info(f"Connected to RabbitMQ, listening on {PUSH_QUEUE}")
-        except Exception as e:
-            logger.error(f"Failed to connect to RabbitMQ: {str(e)}")
-            raise
+    def connect(self, max_retries=10, retry_delay=5):
+        """Connects to RabbitMQ with retry logic."""
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                parameters = pika.URLParameters(self.rabbitmq_url)
+                self.connection = pika.BlockingConnection(parameters)
+                self.channel = self.connection.channel()
+                
+                # Sets QoS to process one message at a time
+                self.channel.basic_qos(prefetch_count=1)
+                
+                logger.info(f"Connected to RabbitMQ, listening on {PUSH_QUEUE}")
+                return  # Success!
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts: {str(e)}")
+                    raise
+                
+                wait_time = retry_delay * retry_count
+                logger.warning(f"Failed to connect to RabbitMQ (attempt {retry_count}/{max_retries}): {str(e)}")
+                logger.info(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
 
     def check_connection(self) -> bool:
         """Checks RabbitMQ connection without starting consumption."""
@@ -127,13 +137,14 @@ class PushWorker:
             
             data_payload = {
                 'notification_id': str(notification_id),
-                'template_code': template_code,
-                'priority': priority
+                'template_code': str(template_code),
+                'priority': str(priority)
             }
             if link:
                 data_payload['link'] = str(link)
             if metadata:
-                data_payload['metadata'] = metadata
+                # FCM requires all data values to be strings
+                data_payload['metadata'] = json.dumps(metadata)
             
             self.push_sender.send_push(
                 device_token=device_token,
