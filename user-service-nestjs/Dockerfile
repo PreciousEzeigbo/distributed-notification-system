@@ -7,14 +7,14 @@ WORKDIR /app
 # Copy package files first
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (including devDependencies for build)
 RUN npm install
 
 # Copy the rest of your app
 COPY . .
 
-# Build the app
-RUN npm run build
+# Build the app using npx
+RUN npx nest build
 
 # Expose NestJS default port
 EXPOSE 3000

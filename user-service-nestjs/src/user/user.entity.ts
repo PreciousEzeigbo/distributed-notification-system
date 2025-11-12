@@ -13,4 +13,13 @@ export class User {
 
   @Column({ nullable: true })
   password: string;
+
+  @Column({ nullable: true })
+  push_token: string;
+
+  @Column({ type: 'jsonb', default: { email: true, push: true } })
+  preferences: {
+    email: boolean;
+    push: boolean;
+  };
 }
