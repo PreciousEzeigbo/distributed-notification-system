@@ -281,6 +281,54 @@ def delete_notification_preference(preference_id: int, db: Session = Depends(get
     logger.info(f"Notification preference deleted: {preference_id}")
     return schemas.APIResponse(message="Notification preference deleted successfully")
 
+@router.post("/me/fcm-token", response_model=schemas.APIResponse[schemas.UserResponse])
+def register_fcm_token(
+    token_data: schemas.FCMTokenRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Register or update FCM device token for push notifications
+    
+    Mobile apps should call this endpoint after login to register their device token.
+    
+    Request body:
+    {
+        "fcm_token": "firebase-device-token-string"
+    }
+    """
+    # Update user's push token
+    current_user.push_token = token_data.fcm_token
+    db.commit()
+    db.refresh(current_user)
+    
+    logger.info(f"FCM token registered for user: {current_user.email}")
+    
+    return schemas.APIResponse(
+        data=current_user,
+        message="FCM token registered successfully"
+    )
+
+@router.delete("/me/fcm-token", response_model=schemas.APIResponse)
+def remove_fcm_token(
+    current_user: models.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Remove FCM device token (e.g., when user logs out)
+    
+    Mobile apps should call this endpoint on logout to prevent sending
+    notifications to devices that are no longer logged in.
+    """
+    current_user.push_token = None
+    db.commit()
+    
+    logger.info(f"FCM token removed for user: {current_user.email}")
+    
+    return schemas.APIResponse(
+        message="FCM token removed successfully"
+    )
+
 @router.get("/email/{email}", response_model=schemas.APIResponse[schemas.UserResponse])
 def get_user_by_email(email: str, db: Session = Depends(get_db)):
     """Get user by email - Internal endpoint for service communication"""
