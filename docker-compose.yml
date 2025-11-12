@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL for User Service
@@ -110,6 +110,32 @@ services:
       - ./user-service:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+    # ✅ NestJS version of the User Service
+  user-service-nestjs:
+    build:
+      context: ./user-service-nestjs
+      dockerfile: Dockerfile
+    container_name: user-service-nestjs
+    environment:
+      DATABASE_URL: postgresql://user_service:user_password@user-db:5432/user_service_db
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      SECRET_KEY: your-secret-key-change-in-production
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      PORT: 3000
+    ports:
+      - "3001:3000"
+    depends_on:
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./user-service-nestjs:/app
+    command: ["npm", "run", "start:dev"]
+
   # Template Service
   template-service:
     build:
@@ -188,7 +214,11 @@ services:
       - ./email-service:/app
     command: python -u app/main.py
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'from app.main import EmailWorker; worker = EmailWorker(); exit(0) if worker.check_connection() else exit(1)'"]
+      test:
+        [
+          "CMD-SHELL",
+          "python -c 'from app.main import EmailWorker; worker = EmailWorker(); exit(0) if worker.check_connection() else exit(1)'",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -218,7 +248,11 @@ services:
       - ${FCM_CREDENTIALS_PATH:-./fcm-credentials.json}:/app/fcm-credentials.json
     command: python -u app/main.py
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'from app.main import PushWorker; worker = PushWorker(); exit(0) if worker.check_connection() else exit(1)'"]
+      test:
+        [
+          "CMD-SHELL",
+          "python -c 'from app.main import PushWorker; worker = PushWorker(); exit(0) if worker.check_connection() else exit(1)'",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
