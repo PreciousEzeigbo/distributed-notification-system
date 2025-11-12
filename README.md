@@ -1,4 +1,3 @@
-````markdown
 # Notification System - Microservices Architecture
 
 ![Tests](https://img.shields.io/badge/tests-21%2F22%20passing-brightgreen)
