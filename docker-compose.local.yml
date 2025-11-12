@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  template-db:
+    image: postgres:15
+    container_name: template-db
+    environment:
+      POSTGRES_DB: template_service_db
+      POSTGRES_USER: template_service
+      POSTGRES_PASSWORD: template_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - template-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U template_service -d template_service_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  template-service:
+    build:
+      context: ./template-service
+      dockerfile: Dockerfile
+    container_name: template-service
+    environment:
+      DATABASE_URL: postgresql://template_service:template_password@template-db:5432/template_service_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    ports:
+      - "8002:3000"
+    depends_on:
+      template-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Remove these volume mounts for production build
+    # volumes:
+    #   - ./template-service:/app
+    #   - /app/node_modules
+    command: >
+      sh -c "
+        npx prisma migrate deploy --schema=./prisma/schema.prisma &&
+        node dist/main
+      "
+
+volumes:
+  template-db-data:
+  rabbitmq-data:
