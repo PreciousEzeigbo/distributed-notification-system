@@ -12,9 +12,6 @@ A scalable, distributed notification system built with microservices architectur
 ## 📖 Documentation
 
 - **[API_TESTING.md](./API_TESTING.md)** - Complete API endpoint documentation, testing examples, and troubleshooting
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Production deployment guide for single server and cloud deployments
-- **[AWS_EC2_DEPLOYMENT.md](./AWS_EC2_DEPLOYMENT.md)** - Detailed AWS EC2 deployment instructions
-- **[PER_SERVICE_ENV_GUIDE.md](./PER_SERVICE_ENV_GUIDE.md)** - Guide for managing environment variables per service
 - **[PROJECT_CHARTER.md](./PROJECT_CHARTER.md)** - Detailed project specifications and requirements
 - **[FCM_SETUP.md](./FCM_SETUP.md)** - Firebase Cloud Messaging setup guide
 - **[ARCHITECTURE.txt](./ARCHITECTURE.txt)** - System architecture and design details
@@ -187,7 +184,7 @@ PUSH_QUEUE=push.queue
 MAX_RETRIES=3
 ```
 
-> **📌 Note**: For complete environment variable guide, see [PER_SERVICE_ENV_GUIDE.md](./PER_SERVICE_ENV_GUIDE.md) > **📌 Firebase Setup**: For FCM setup, see [PROJECT_CHARTER.md - Section 17](./PROJECT_CHARTER.md#17-firebase-cloud-messaging-setup)
+> **📌 Note**: **📌 Firebase Setup**: For FCM setup, see [PROJECT_CHARTER.md - Section 17](./PROJECT_CHARTER.md#17-firebase-cloud-messaging-setup)
 
 ### 3. Start Services
 
