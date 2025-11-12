@@ -7,17 +7,14 @@ WORKDIR /app
 # Copy package files first
 COPY package*.json ./
 
-# Install dependencies (including devDependencies for build)
+# Install dependencies
 RUN npm install
 
 # Copy the rest of your app
 COPY . .
 
-# Build the app using npx
-RUN npx nest build
-
 # Expose NestJS default port
 EXPOSE 3000
 
-# Run the app
-CMD ["npm", "run", "start:prod"]
+# Run in development mode (will be overridden by docker-compose command)
+CMD ["npm", "run", "start:dev"]
