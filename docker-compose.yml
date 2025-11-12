@@ -124,21 +124,35 @@ services:
   # Template Service
   template-service:
     build:
-      context: .
-      dockerfile: ./template-service/Dockerfile
+      context: ./template-service
+      dockerfile: Dockerfile
     container_name: template-service
-    env_file:
-      - ./template-service/.env
+    environment:
+      DATABASE_URL:  ${DATABASE_URL}
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
     ports:
-      - "8002:8000"
+      - "8002:3000"
     depends_on:
       template-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./template-service:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # volumes:
+    #   - ./template-service:/app
+    #   - /app/node_modules
+    command: >
+      sh -c "npx prisma migrate deploy --schema=./prisma/schema.prisma && 
+             npm run start:prod"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/templates"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # API Gateway
   api-gateway:
@@ -160,7 +174,7 @@ services:
       user-service-nestjs:
         condition: service_started
       template-service:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./api-gateway:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -180,7 +194,7 @@ services:
       redis:
         condition: service_healthy
       template-service:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./email-service:/app
     command: python -u app/main.py
@@ -206,7 +220,7 @@ services:
       redis:
         condition: service_healthy
       template-service:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./push-service:/app
       - ./push-service/fcm-credentials.json:/app/fcm-credentials.json

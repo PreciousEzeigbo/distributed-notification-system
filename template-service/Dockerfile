@@ -1,31 +1,40 @@
-FROM python:3.11-slim
-
+# template-service/Dockerfile
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Copy package files
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
 
-# Copy requirements
-COPY template-service/requirements.txt .
+# Install ALL dependencies (including dev dependencies for build)
+RUN npm ci --legacy-peer-deps
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy source code and prisma schema
+COPY src ./src
+COPY prisma ./prisma
 
-# Copy shared utilities
+# Generate Prisma Client
+RUN npx prisma generate
 
-# Copy application code
-COPY template-service /app
+# Build the application
+RUN npm run build
 
-# Expose port
-EXPOSE 8000
+# Production stage
+FROM node:20-alpine
+WORKDIR /app
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Copy package files
+COPY package*.json ./
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Install only production dependencies
+RUN npm ci --only=production --legacy-peer-deps
+
+# Copy built application from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+EXPOSE 3000
+CMD ["node", "dist/main"]
