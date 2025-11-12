@@ -1,19 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class AppService {
-  private prisma = new PrismaClient();
+  constructor(
+    @InjectDataSource()
+    private dataSource: DataSource,
+  ) {}
 
   getHello(): string {
-    return 'Template Service is running';
+    return 'Template Service API';
   }
 
   async getHealth() {
     try {
-      // Test database connection
-      await this.prisma.$queryRaw`SELECT 1`;
-      
+      await this.dataSource.query('SELECT 1');
       return {
         success: true,
         message: 'Template Service is healthy',
@@ -29,21 +31,16 @@ export class AppService {
     } catch (error) {
       return {
         success: false,
-        message: 'Service unhealthy',
-        error: error.message,
+        message: 'Template Service is unhealthy',
         data: {
           status: 'unhealthy',
           service: 'template-service',
           version: '1.0.0',
           checks: {
-            database: 'failed',
+            database: 'error',
           },
         },
       };
     }
-  }
-
-  async onModuleDestroy() {
-    await this.prisma.$disconnect();
   }
 }

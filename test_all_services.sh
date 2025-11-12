@@ -221,7 +221,7 @@ fi
 
 # Get template by code
 print_test "Get Template by Code"
-GET_TEMPLATE_RESPONSE=$(curl -s "$TEMPLATE_SERVICE/templates/$TEMPLATE_CODE")
+GET_TEMPLATE_RESPONSE=$(curl -s "$TEMPLATE_SERVICE/templates/code/$TEMPLATE_CODE")
 TEMPLATE_NAME=$(echo "$GET_TEMPLATE_RESPONSE" | jq -r '.name // .data.name // empty' 2>/dev/null)
 if [ -n "$TEMPLATE_NAME" ]; then
     print_pass "Template retrieved successfully (Name: $TEMPLATE_NAME)"

@@ -1,0 +1,241 @@
+version: "3.8"
+
+# Production Docker Compose Configuration
+# This file is optimized for production deployment
+# - No volume mounts (code is baked into images)
+# - Uses environment variables from .env file
+# - Includes restart policies
+# - Health checks enabled
+
+services:
+  # PostgreSQL for User Service
+  user-db:
+    image: postgres:15-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_DB: ${USER_DB_NAME}
+      POSTGRES_USER: ${USER_DB_USER}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Template Service
+  template-db:
+    image: postgres:15-alpine
+    container_name: template-db
+    environment:
+      POSTGRES_DB: ${TEMPLATE_DB_NAME}
+      POSTGRES_USER: ${TEMPLATE_DB_USER}
+      POSTGRES_PASSWORD: ${TEMPLATE_DB_PASSWORD}
+    volumes:
+      - template-db-data:/var/lib/postgresql/data
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEMPLATE_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Gateway Service
+  gateway-db:
+    image: postgres:15-alpine
+    container_name: gateway-db
+    environment:
+      POSTGRES_DB: ${GATEWAY_DB_NAME}
+      POSTGRES_USER: ${GATEWAY_DB_USER}
+      POSTGRES_PASSWORD: ${GATEWAY_DB_PASSWORD}
+    volumes:
+      - gateway-db-data:/var/lib/postgresql/data
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GATEWAY_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # User Service (NestJS)
+  user-service-nestjs:
+    build:
+      context: ./user-service-nestjs
+      dockerfile: Dockerfile
+    container_name: user-service-nestjs
+    environment:
+      DB_HOST: ${USER_DB_HOST}
+      DB_PORT: ${USER_DB_PORT}
+      DB_USER: ${USER_DB_USER}
+      DB_PASSWORD: ${USER_DB_PASSWORD}
+      DB_NAME: ${USER_DB_NAME}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
+    depends_on:
+      user-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  # Template Service (NestJS)
+  template-service:
+    build:
+      context: ./template-service
+      dockerfile: Dockerfile
+    container_name: template-service
+    environment:
+      DB_HOST: ${TEMPLATE_DB_HOST}
+      DB_PORT: ${TEMPLATE_DB_PORT}
+      DB_USER: ${TEMPLATE_DB_USER}
+      DB_PASSWORD: ${TEMPLATE_DB_PASSWORD}
+      DB_NAME: ${TEMPLATE_DB_NAME}
+    depends_on:
+      template-db:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    environment:
+      DATABASE_URL: postgresql://${GATEWAY_DB_USER}:${GATEWAY_DB_PASSWORD}@${GATEWAY_DB_HOST}:${GATEWAY_DB_PORT}/${GATEWAY_DB_NAME}
+      REDIS_URL: redis://${REDIS_HOST}:${REDIS_PORT}/${REDIS_DB}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
+      USER_SERVICE_URL: ${USER_SERVICE_URL}
+      TEMPLATE_SERVICE_URL: ${TEMPLATE_SERVICE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM}
+      PORT: ${API_GATEWAY_PORT}
+    ports:
+      - "${API_GATEWAY_PORT}:8000"
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user-service-nestjs:
+        condition: service_started
+      template-service:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Email Service Worker
+  email-service:
+    build:
+      context: ./email-service
+      dockerfile: Dockerfile
+    container_name: email-service
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
+      REDIS_URL: redis://${REDIS_HOST}:${REDIS_PORT}/${REDIS_DB}
+      TEMPLATE_SERVICE_URL: ${TEMPLATE_SERVICE_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      template-service:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  # Push Service Worker
+  push-service:
+    build:
+      context: ./push-service
+      dockerfile: Dockerfile
+    container_name: push-service
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
+      REDIS_URL: redis://${REDIS_HOST}:${REDIS_PORT}/${REDIS_DB}
+      TEMPLATE_SERVICE_URL: ${TEMPLATE_SERVICE_URL}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      template-service:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+networks:
+  notification-network:
+    driver: bridge
+
+volumes:
+  user-db-data:
+  template-db-data:
+  gateway-db-data:
+  redis-data:
+  rabbitmq-data:

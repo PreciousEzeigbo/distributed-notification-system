@@ -13,8 +13,11 @@ RUN npm install
 # Copy the rest of your app
 COPY . .
 
+# Build the application
+RUN npm run build
+
 # Expose NestJS default port
 EXPOSE 3000
 
-# Run in development mode (will be overridden by docker-compose command)
-CMD ["npm", "run", "start:dev"]
+# Run in production mode (faster startup)
+CMD ["node", "dist/main"]

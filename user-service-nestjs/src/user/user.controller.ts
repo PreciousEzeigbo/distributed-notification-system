@@ -13,7 +13,7 @@ export class UserController {
 
   @Get(':id')
   findOne(@Param('id') id: string): Promise<User> {
-    return this.userService.findOne(+id);
+    return this.userService.findOne(id);
   }
 
   @Post()
@@ -23,12 +23,12 @@ export class UserController {
 
   @Put(':id')
   update(@Param('id') id: string, @Body() userData: Partial<User>): Promise<User> {
-    return this.userService.update(+id, userData);
+    return this.userService.update(id, userData);
   }
 
   @Get(':id/preferences')
   getPreferences(@Param('id') id: string) {
-    return this.userService.getPreferences(+id);
+    return this.userService.getPreferences(id);
   }
 
   @Put(':id/preferences')
@@ -36,7 +36,7 @@ export class UserController {
     @Param('id') id: string,
     @Body() preferences: { email?: boolean; push?: boolean },
   ) {
-    return this.userService.updatePreferences(+id, preferences);
+    return this.userService.updatePreferences(id, preferences);
   }
 
   @Put(':id/push-token')
@@ -44,6 +44,6 @@ export class UserController {
     @Param('id') id: string,
     @Body() body: { push_token: string },
   ) {
-    return this.userService.updatePushToken(+id, body.push_token);
+    return this.userService.updatePushToken(id, body.push_token);
   }
 }

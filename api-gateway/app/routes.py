@@ -32,10 +32,10 @@ def send_notification(
     
     logger.info(f"Received notification request: {request_id}, type: {notification.notification_type}")
     
-    # Idempotency check
+    # Idempotency check - cache first, then DB
     if cache_mgr.check_idempotency(request_id):
-        logger.info(f"Duplicate request detected: {request_id}")
-        # Return existing notification
+        logger.info(f"Duplicate request detected in cache: {request_id}")
+        # Return existing notification from DB
         existing = db.query(models.NotificationRequest).filter(
             models.NotificationRequest.request_id == request_id
         ).first()
@@ -44,6 +44,19 @@ def send_notification(
                 data=existing,
                 message="Notification already processed (idempotent request)"
             )
+    
+    # Check DB for duplicate (in case cache expired)
+    existing = db.query(models.NotificationRequest).filter(
+        models.NotificationRequest.request_id == request_id
+    ).first()
+    if existing:
+        logger.info(f"Duplicate request detected in DB: {request_id}")
+        # Update cache
+        cache_mgr.set_idempotency(request_id, ttl=86400)
+        return schemas.APIResponse(
+            data=existing,
+            message="Notification already processed (idempotent request)"
+        )
     
     # Rate limiting check (100 requests per minute per user)
     rate_limit_key = f"rate_limit:user:{notification.user_id}"
@@ -67,7 +80,7 @@ def send_notification(
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail="User not found")
             response.raise_for_status()
-            user_data = response.json().get("data", {})
+            user_data = response.json()
             cache_mgr.set(user_cache_key, user_data, ttl=300)
         except requests.RequestException as e:
             logger.error(f"Error fetching user data: {str(e)}")

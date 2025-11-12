@@ -17,7 +17,7 @@ export class UserService {
     return this.userRepository.find();
   }
 
-  async findOne(id: number): Promise<User> {
+  async findOne(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
@@ -48,13 +48,13 @@ export class UserService {
     return savedUser;
   }
 
-  async update(id: number, userData: Partial<User>): Promise<User> {
+  async update(id: string, userData: Partial<User>): Promise<User> {
     const user = await this.findOne(id);
     Object.assign(user, userData);
     return this.userRepository.save(user);
   }
 
-  async getPreferences(id: number) {
+  async getPreferences(id: string) {
     const user = await this.findOne(id);
     return {
       success: true,
@@ -67,7 +67,7 @@ export class UserService {
   }
 
   async updatePreferences(
-    id: number,
+    id: string,
     preferences: { email?: boolean; push?: boolean },
   ) {
     const user = await this.findOne(id);
@@ -90,7 +90,7 @@ export class UserService {
     };
   }
 
-  async updatePushToken(id: number, push_token: string) {
+  async updatePushToken(id: string, push_token: string) {
     const user = await this.findOne(id);
     user.push_token = push_token;
     await this.userRepository.save(user);

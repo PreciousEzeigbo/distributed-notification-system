@@ -7,7 +7,7 @@ on:
       - develop
     paths:
       - "api-gateway/**"
-      - "user-service/**"
+      - "user-service-nestjs/**"
       - "email-service/**"
       - "push-service/**"
       - "template-service/**"
@@ -18,7 +18,7 @@ on:
       - develop
     paths:
       - "api-gateway/**"
-      - "user-service/**"
+      - "user-service-nestjs/**"
       - "email-service/**"
       - "push-service/**"
       - "template-service/**"
@@ -41,7 +41,7 @@ jobs:
         id: detect
         run: |
           # Define all services
-          ALL_SERVICES=("api-gateway" "user-service" "email-service" "push-service" "template-service")
+          ALL_SERVICES=("api-gateway" "user-service-nestjs" "email-service" "push-service" "template-service")
 
           # Function to detect language (Python or NestJS only)
           detect_language() {

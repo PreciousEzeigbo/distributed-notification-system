@@ -2,14 +2,16 @@
 
 Hey! So you want to test this bad boy? I've got you covered. This guide walks you through every single endpoint in the system. Let's make some magic happen! ✨
 
+**Updated**: November 2025 - Includes NestJS services (user-service-nestjs, template-service)
+
 ---
 
 ## 📋 Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [User Service API](#user-service-api)
-3. [Template Service API](#template-service-api)
-4. [API Gateway - Notifications](#api-gateway)
+2. [User Service API](#user-service-api) - **NestJS/TypeScript**
+3. [Template Service API](#template-service-api) - **NestJS/TypeScript**
+4. [API Gateway - Notifications](#api-gateway) - **Python/FastAPI**
 5. [FCM Token Management](#fcm-token-management)
 6. [Testing Scenarios](#testing-scenarios)
 7. [Troubleshooting](#troubleshooting)
@@ -33,17 +35,23 @@ You should see all services as **healthy**. If not, give them a minute or check 
 ### Base URLs
 
 ```
-API Gateway:      http://localhost:8000
-User Service:     http://localhost:8001
-Template Service: http://localhost:8002
-RabbitMQ UI:      http://localhost:15672 (admin/admin)
+API Gateway:      http://localhost:8000    (Python/FastAPI)
+User Service:     http://localhost:8001    (NestJS/TypeScript + TypeORM)
+Template Service: http://localhost:8002    (NestJS/TypeScript + TypeORM)
+RabbitMQ UI:      http://localhost:15672   (admin/admin)
 ```
+
+**Important Notes**:
+
+- User IDs are now **UUIDs** (e.g., `a383359a-f766-411c-8fd0-06754a606675`)
+- User and Template services use **TypeORM** (not Prisma)
+- Internal service communication uses port **3000** for NestJS services
 
 ---
 
 ## 👤 User Service API
 
-Base URL: `http://localhost:8001`
+Base URL: `http://localhost:8001` (NestJS/TypeScript)
 
 ### 1. Register a New User
 
@@ -203,6 +211,7 @@ curl -X GET "http://localhost:8001/users/?skip=0&limit=10" \
 ```
 
 **Query Parameters:**
+
 - `skip`: Number of records to skip (default: 0)
 - `limit`: Max records to return (default: 100, max: 1000)
 
@@ -328,6 +337,7 @@ curl -X POST http://localhost:8001/users/me/fcm-token \
 ```
 
 💡 **When to call this:**
+
 - Right after user logs in on mobile
 - When Firebase refreshes the token
 - When user switches devices
@@ -448,6 +458,7 @@ curl "http://localhost:8002/templates/?skip=0&limit=10" | jq .
 ```
 
 **Query Parameters:**
+
 - `skip`: Pagination offset (default: 0)
 - `limit`: Records per page (default: 10)
 - `channel`: Filter by channel (email, push, sms)
@@ -613,6 +624,7 @@ curl -X POST http://localhost:8000/notifications/send \
 ```
 
 **Request Fields:**
+
 - `notification_type`: "email" or "push"
 - `user_id`: User's UUID (from registration)
 - `template_code`: Template name you created
@@ -747,6 +759,7 @@ curl "http://localhost:8000/notifications/user/$USER_ID?skip=0&limit=10" | jq .
 ```
 
 **Query Parameters:**
+
 - `skip`: Pagination offset
 - `limit`: Results per page
 - `status`: Filter by status (pending, queued, processing, sent, failed)
@@ -964,6 +977,7 @@ Open in browser: http://localhost:15672
 **Credentials:** admin / admin
 
 **What to check:**
+
 - **Queues:** See message counts in email.queue, push.queue, failed.queue
 - **Consumers:** Make sure workers are connected
 - **Message rates:** Incoming/outgoing messages per second
@@ -978,9 +992,9 @@ Open in browser: http://localhost:15672
 docker-compose exec gateway-db psql -U api_gateway -d gateway_db
 
 # Check notifications
-SELECT id, user_id, notification_type, status, created_at 
-FROM notifications 
-ORDER BY created_at DESC 
+SELECT id, user_id, notification_type, status, created_at
+FROM notifications
+ORDER BY created_at DESC
 LIMIT 10;
 
 # Check failed notifications
@@ -1000,8 +1014,8 @@ docker-compose exec user-db psql -U user_service -d user_service_db
 SELECT id, name, email, push_token, is_active FROM users;
 
 # Check preferences
-SELECT u.email, np.channel, np.enabled 
-FROM users u 
+SELECT u.email, np.channel, np.enabled
+FROM users u
 JOIN notification_preferences np ON u.id = np.user_id;
 
 \q
@@ -1165,15 +1179,15 @@ docker stats
 
 Here's what "good" looks like:
 
-| Metric | Expected Value |
-|--------|----------------|
-| API Gateway Response Time | < 100ms |
-| Notification Queuing | < 50ms |
-| Email Delivery (total) | 2-10 seconds |
-| Push Delivery (total) | 1-5 seconds |
-| Queue Throughput | 1000+ msgs/min |
-| DB Query Time | < 10ms |
-| Cache Hit Rate | > 80% |
+| Metric                    | Expected Value |
+| ------------------------- | -------------- |
+| API Gateway Response Time | < 100ms        |
+| Notification Queuing      | < 50ms         |
+| Email Delivery (total)    | 2-10 seconds   |
+| Push Delivery (total)     | 1-5 seconds    |
+| Queue Throughput          | 1000+ msgs/min |
+| DB Query Time             | < 10ms         |
+| Cache Hit Rate            | > 80%          |
 
 ---
 
