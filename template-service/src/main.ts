@@ -17,11 +17,11 @@ async function bootstrap() {
     .addTag('health')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('docs', app, document);
   
   await app.listen(process.env.PORT ?? 3000);
   console.log(`🚀 Template Service running on: http://localhost:${process.env.PORT ?? 3000}`);
-  console.log(`📚 Swagger docs available at: http://localhost:${process.env.PORT ?? 3000}/api`);
+  console.log(`📚 Swagger docs available at: http://localhost:${process.env.PORT ?? 3000}/docs`);
   console.log(`📋 API endpoints: http://localhost:${process.env.PORT ?? 3000}/api/v1/templates`);
 }
 bootstrap();
