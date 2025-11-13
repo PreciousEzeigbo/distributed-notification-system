@@ -39,7 +39,6 @@ export class UserService {
     await this.rabbitMQService.sendMessage('user_created', {
       id: savedUser.id,
       email: savedUser.email,
-      name: savedUser.name,
       preferences: savedUser.preferences,
     });
 

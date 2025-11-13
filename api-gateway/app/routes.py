@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import uuid
 from uuid import UUID
 from datetime import datetime
@@ -15,19 +15,80 @@ import requests
 logger = setup_logging("api-gateway")
 
 router = APIRouter()
+user_router = APIRouter()
+template_router = APIRouter()
 
 # Initialize managers
 queue_mgr = get_queue_manager(config.RABBITMQ_URL)
 cache_mgr = get_cache_manager(config.REDIS_URL)
 
+from pydantic import BaseModel
+
+class SimpleNotificationRequest(BaseModel):
+    user_id: UUID
+    template_code: str
+    variables: Dict[str, Any]
+    priority: str = "normal"
+
+@router.post("/email", response_model=schemas.APIResponse[schemas.NotificationResponse], status_code=status.HTTP_201_CREATED)
+def send_email_notification(
+    request: SimpleNotificationRequest,
+    db: Session = Depends(get_db)
+):
+    """Convenience endpoint to send email notifications"""
+    # Map priority string to int
+    priority_map = {"low": 0, "normal": 0, "high": 1, "urgent": 2}
+    priority_int = priority_map.get(request.priority.lower(), 0)
+    
+    # Create notification request
+    notification = schemas.NotificationRequest(
+        notification_type=schemas.NotificationType.email,
+        user_id=request.user_id,
+        template_code=request.template_code,
+        variables=request.variables,
+        request_id=str(uuid.uuid4()),
+        priority=priority_int
+    )
+    
+    # Use the existing send_notification function, generate correlation_id here
+    return send_notification(notification, db, correlation_id=str(uuid.uuid4()))
+
+
+@router.post("/push", response_model=schemas.APIResponse[schemas.NotificationResponse], status_code=status.HTTP_201_CREATED)
+def send_push_notification(
+    request: SimpleNotificationRequest,
+    db: Session = Depends(get_db)
+):
+    """Convenience endpoint to send push notifications"""
+    # Map priority string to int
+    priority_map = {"low": 0, "normal": 0, "high": 1, "urgent": 2}
+    priority_int = priority_map.get(request.priority.lower(), 0)
+    
+    # Create notification request
+    notification = schemas.NotificationRequest(
+        notification_type=schemas.NotificationType.push,
+        user_id=request.user_id,
+        template_code=request.template_code,
+        variables=request.variables,
+        request_id=str(uuid.uuid4()),
+        priority=priority_int
+    )
+    
+    # Use the existing send_notification function, generate correlation_id here
+    return send_notification(notification, db, correlation_id=str(uuid.uuid4()))
+
+
 @router.post("/send", response_model=schemas.APIResponse[schemas.NotificationResponse], status_code=status.HTTP_201_CREATED)
 def send_notification(
     notification: schemas.NotificationRequest,
     db: Session = Depends(get_db),
-    x_correlation_id: Optional[str] = Header(None)
+    correlation_id: Optional[str] = None,
+    x_correlation_id: Optional[str] = Header(None, alias="X-Correlation-ID")
 ):
     """Send a notification (email or push)"""
-    correlation_id = x_correlation_id or str(uuid.uuid4())
+    # Use provided correlation_id, or from header, or generate new one
+    if correlation_id is None:
+        correlation_id = x_correlation_id if x_correlation_id else str(uuid.uuid4())
     request_id = notification.request_id
     
     logger.info(f"Received notification request: {request_id}, type: {notification.notification_type}")
@@ -74,7 +135,7 @@ def send_notification(
     if not user_data:
         try:
             response = requests.get(
-                f"{config.USER_SERVICE_URL}/users/{notification.user_id}",
+                f"{config.USER_SERVICE_URL}/api/v1/users/{notification.user_id}",
                 timeout=5
             )
             if response.status_code == 404:
@@ -185,7 +246,7 @@ def send_bulk_notifications(
             
             if not user_data:
                 response = requests.get(
-                    f"{config.USER_SERVICE_URL}/users/{user_id}",
+                    f"{config.USER_SERVICE_URL}/api/v1/users/{user_id}",
                     timeout=5
                 )
                 if response.status_code == 404:
@@ -333,3 +394,228 @@ def update_notification_status(
         data=notification,
         message="Notification status updated successfully"
     )
+
+
+# ============================================
+# User Management Proxy Routes
+# ============================================
+
+@user_router.post("/users", status_code=status.HTTP_201_CREATED)
+def create_user(user_data: dict):
+    """Proxy request to User Service - Create a new user"""
+    try:
+        response = requests.post(
+            f"{config.USER_SERVICE_URL}/api/v1/users",
+            json=user_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to create user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+@user_router.get("/users/{user_id}")
+def get_user(user_id: str):
+    """Proxy request to User Service - Get user by ID"""
+    try:
+        response = requests.get(
+            f"{config.USER_SERVICE_URL}/api/v1/users/{user_id}",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to get user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+@user_router.get("/users")
+def list_users():
+    """Proxy request to User Service - List all users"""
+    try:
+        response = requests.get(
+            f"{config.USER_SERVICE_URL}/api/v1/users",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to list users: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+@user_router.put("/users/{user_id}")
+def update_user(user_id: str, user_data: dict):
+    """Proxy request to User Service - Update user"""
+    try:
+        response = requests.put(
+            f"{config.USER_SERVICE_URL}/api/v1/users/{user_id}",
+            json=user_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to update user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+@user_router.get("/users/{user_id}/preferences")
+def get_user_preferences(user_id: str):
+    """Proxy request to User Service - Get user notification preferences"""
+    try:
+        response = requests.get(
+            f"{config.USER_SERVICE_URL}/api/v1/users/{user_id}/preferences",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to get preferences: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+@user_router.put("/users/{user_id}/preferences")
+def update_user_preferences(user_id: str, preference_data: dict):
+    """Proxy request to User Service - Update user notification preferences"""
+    try:
+        response = requests.put(
+            f"{config.USER_SERVICE_URL}/api/v1/users/{user_id}/preferences",
+            json=preference_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to update preferences: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+@user_router.put("/users/{user_id}/push-token")
+def update_push_token(user_id: str, token_data: dict):
+    """Proxy request to User Service - Update user push notification token"""
+    try:
+        response = requests.put(
+            f"{config.USER_SERVICE_URL}/api/v1/users/{user_id}/push-token",
+            json=token_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to update push token: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"User service error: {str(e)}")
+
+
+# ============================================
+# Template Management Proxy Routes
+# ============================================
+
+@template_router.post("/templates", status_code=status.HTTP_201_CREATED)
+def create_template(template_data: dict):
+    """Proxy request to Template Service - Create a new template"""
+    try:
+        response = requests.post(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates",
+            json=template_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to create template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")
+
+
+@template_router.get("/templates/{template_id}")
+def get_template(template_id: str):
+    """Proxy request to Template Service - Get template by ID"""
+    try:
+        response = requests.get(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates/{template_id}",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to get template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")
+
+
+@template_router.get("/templates")
+def list_templates():
+    """Proxy request to Template Service - List all templates"""
+    try:
+        response = requests.get(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to list templates: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")
+
+
+@template_router.get("/templates/code/{code}")
+def get_template_by_code(code: str):
+    """Proxy request to Template Service - Get template by code"""
+    try:
+        response = requests.get(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates/code/{code}",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to get template by code: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")
+
+
+@template_router.put("/templates/{template_id}")
+def update_template(template_id: str, template_data: dict):
+    """Proxy request to Template Service - Update template"""
+    try:
+        response = requests.put(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates/{template_id}",
+            json=template_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to update template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")
+
+
+@template_router.delete("/templates/{template_id}")
+def delete_template(template_id: str):
+    """Proxy request to Template Service - Delete template"""
+    try:
+        response = requests.delete(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates/{template_id}",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to delete template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")
+
+
+@template_router.post("/templates/render")
+def render_template(render_data: dict):
+    """Proxy request to Template Service - Render template with variables"""
+    try:
+        response = requests.post(
+            f"{config.TEMPLATE_SERVICE_URL}/api/v1/templates/render",
+            json=render_data,
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to render template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template service error: {str(e)}")

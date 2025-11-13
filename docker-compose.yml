@@ -146,7 +146,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
       interval: 20s
       timeout: 5s
       retries: 10
@@ -155,8 +155,8 @@ services:
   # API Gateway
   api-gateway:
     build:
-      context: .
-      dockerfile: ./api-gateway/Dockerfile
+      context: ./api-gateway
+      dockerfile: Dockerfile
     container_name: api-gateway
     env_file:
       - ./api-gateway/.env
@@ -176,12 +176,18 @@ services:
     volumes:
       - ./api-gateway:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Email Service
   email-service:
     build:
-      context: .
-      dockerfile: ./email-service/Dockerfile
+      context: ./email-service
+      dockerfile: Dockerfile
     container_name: email-service
     restart: always
     env_file:
@@ -206,8 +212,8 @@ services:
   # Push Service
   push-service:
     build:
-      context: .
-      dockerfile: ./push-service/Dockerfile
+      context: ./push-service
+      dockerfile: Dockerfile
     container_name: push-service
     restart: always
     env_file:

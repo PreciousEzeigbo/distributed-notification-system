@@ -92,16 +92,21 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error during shutdown: {str(e)}")
 
-app.include_router(notification_router, prefix="/notifications", tags=["notifications"])
+app.include_router(notification_router, prefix="/api/v1/notifications", tags=["notifications"])
+
+# Include user and template proxy routes under /api/v1
+from .routes import router as notification_router, user_router, template_router
+app.include_router(user_router, prefix="/api/v1", tags=["users"])
+app.include_router(template_router, prefix="/api/v1", tags=["templates"])
 
 @app.get("/")
 def read_root():
     return APIResponse(
         message="API Gateway is running",
-        data={"service": "api-gateway", "version": "1.0.0"}
+        data={"service": "api-gateway", "version": "1.0.0", "endpoints": "/api/v1/notifications"}
     )
 
-@app.get("/health")
+@app.get("/api/v1/health")
 def health_check():
     """Health check endpoint"""
     try:

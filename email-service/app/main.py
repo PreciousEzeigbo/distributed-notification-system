@@ -81,7 +81,7 @@ class EmailWorker:
         """Fetches and renders a template from the template service."""
         try:
             response = requests.post(
-                f"{TEMPLATE_SERVICE_URL}/templates/render",
+                f"{TEMPLATE_SERVICE_URL}/api/v1/templates/render",
                 json={
                     "template_name": template_name,
                     "language": language,
@@ -102,7 +102,7 @@ class EmailWorker:
             from datetime import datetime
             
             response = requests.post(
-                f"{GATEWAY_URL}/notifications/{notification_type}/status",
+                f"{GATEWAY_URL}/api/v1/notifications/{notification_type}/status",
                 json={
                     "notification_id": str(notification_id),
                     "status": status,
