@@ -18,11 +18,11 @@ async function bootstrap() {
     .build();
   
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('docs', app, document);
   
   await app.listen(process.env.PORT ?? 3000);
   console.log(`🚀 User Service running on: http://localhost:${process.env.PORT ?? 3000}`);
-  console.log(`📚 Swagger docs: http://localhost:${process.env.PORT ?? 3000}/api`);
+  console.log(`📚 Swagger docs: http://localhost:${process.env.PORT ?? 3000}/docs`);
   console.log(`📋 API endpoints: http://localhost:${process.env.PORT ?? 3000}/api/v1/users`);
 }
 void bootstrap();

@@ -25,7 +25,7 @@ cache_mgr = get_cache_manager(config.REDIS_URL)
 from pydantic import BaseModel
 
 class SimpleNotificationRequest(BaseModel):
-    user_id: UUID
+    user_id: UUID = Field(..., alias="id") # Accept 'id' from client, map to 'user_id' internally
     template_code: str
     variables: Dict[str, Any]
     priority: str = "normal"
@@ -141,8 +141,13 @@ def send_notification(
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail="User not found")
             response.raise_for_status()
-            user_data = response.json()
-            cache_mgr.set(user_cache_key, user_data, ttl=300)
+            user_response_data = response.json()
+            # Assuming the user data is in the 'data' field of the response, which is a list
+            if user_response_data and user_response_data.get("data") and len(user_response_data["data"]) > 0:
+                user_data = user_response_data["data"][0]
+                cache_mgr.set(user_cache_key, user_data, ttl=300)
+            else:
+                raise HTTPException(status_code=404, detail="User data not found in response")
         except requests.RequestException as e:
             logger.error(f"Error fetching user data: {str(e)}")
             raise HTTPException(
@@ -252,8 +257,13 @@ def send_bulk_notifications(
                 if response.status_code == 404:
                     failed.append({"user_id": str(user_id), "error": "User not found"})
                     continue
-                user_data = response.json().get("data", {})
-                cache_mgr.set(user_cache_key, user_data, ttl=300)
+                user_response_data = response.json()
+                if user_response_data and user_response_data.get("data") and len(user_response_data["data"]) > 0:
+                    user_data = user_response_data["data"][0]
+                    cache_mgr.set(user_cache_key, user_data, ttl=300)
+                else:
+                    failed.append({"user_id": str(user_id), "error": "User data not found in response"})
+                    continue
             
             # Create individual notification request
             notification = schemas.NotificationRequest(
